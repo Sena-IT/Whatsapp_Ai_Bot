@@ -1,8 +1,9 @@
 import openai
 import os
+from config import Settings
 
-
-client = openai.OpenAI(api_key=OPENAI_API_KEY)
+env = Settings()
+client = openai.OpenAI(api_key=env.OPENAI_API_KEY)
 
 response = client.chat.completions.create(
     model="gpt-4o-mini",

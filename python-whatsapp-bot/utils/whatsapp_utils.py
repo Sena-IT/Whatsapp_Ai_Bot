@@ -5,17 +5,12 @@ import requests
 import os
 from datetime import datetime
 from openai import OpenAI
-# from app.services.openai_service import generate_response
 import re
 
 from dotenv import load_dotenv, set_key, find_dotenv
-
-#database
-# from .database import insert_client , insert_srn , get_client_by_phone
+from config.env import ACCESS_TOKEN, VERSION, PHONE_NUMBER_ID
 
 
-from app.config import load_configurations
-settings = load_configurations()
 
 dotenv_path = find_dotenv()
 load_dotenv(dotenv_path)
@@ -23,9 +18,7 @@ load_dotenv(dotenv_path)
 # Replace the single data_history with a sessions dictionary
 sessions = {}
 
-# Zoho CRM Configuration
-ZOHO_CRM_URL = "https://www.zohoapis.com/crm/v2"
-ZOHO_ACCESS_TOKEN = os.getenv('ZOHO_ACCESS_TOKEN')
+
 
 # Define cleanup function before using it
 def cleanup_inactive_sessions(timeout_minutes=5):
@@ -42,36 +35,8 @@ def cleanup_inactive_sessions(timeout_minutes=5):
         del sessions[phone_number]
         logging.info(f"Cleaned up inactive session for {phone_number}")
 
-def send_scheduled_whatsapp_message():
-    """Send a reminder message on the 10th of every month."""
-    recipient = os.getenv("RECIPIENT_WAID")  # Fetch recipient from environment
-    if not recipient:
-        logging.error("❌ No recipient phone number found! Skipping reminder.")
-        return
-
-    text = "Reminder: Your scheduled task for the 10th is due today!"
-
-    try:
-        message_data = get_text_message_input(recipient, text)
-        response_code = send_message(message_data)
-
-        if response_code == 200:
-            logging.info(f"✅ Reminder successfully sent to {recipient}")
-        else:
-            logging.error(f"❌ Failed to send reminder. Response Code: {response_code}")
-
-    except Exception as e:
-        logging.error(f"❌ Error sending reminder: {str(e)}")
 
 
-# Initialize scheduler after defining the cleanup function 
-from apscheduler.schedulers.background import BackgroundScheduler
-
-scheduler = BackgroundScheduler()
-scheduler.add_job(cleanup_inactive_sessions, 'interval', minutes=15)  # Remove the parentheses
-scheduler.add_job(send_scheduled_whatsapp_message, 'cron', day=14, hour=22, minute=17, timezone="Asia/Kolkata")
-
-scheduler.start()
 
 def log_http_response(response):
     logging.info(f"Status: {response.status_code}")
@@ -189,20 +154,17 @@ def generate_response(body):
 
     session[phone_number]["conversation_history"].append(f"Bot: {bot_response}")
 
-    # Create or update Zoho CRM record
-    if not update_zoho_contact(phone_number, message_body):
-        create_zoho_lead(phone_number, message_body)
-
+   
     return bot_response
 
 def delete_uploaded_file(media_id,uploaded_time):
 
     print("------------------- delete_uploaded_file ------------------------")
 
-    url = f"https://graph.facebook.com/{settings.VERSION}/{media_id}"
+    url = f"https://graph.facebook.com/{VERSION}/{media_id}"
     
     headers = {
-        "Authorization": f"Bearer {settings.ACCESS_TOKEN}"
+        "Authorization": f"Bearer {ACCESS_TOKEN}"
     }
 
     response = requests.delete(url, headers=headers)
@@ -222,10 +184,10 @@ def delete_uploaded_file(media_id,uploaded_time):
 def send_message(data):
     headers = {
         "Content-type": "application/json",
-        "Authorization": f"Bearer {settings.ACCESS_TOKEN}",
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
     }
 
-    url = f"https://graph.facebook.com/{settings.VERSION}/{settings.PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/{VERSION}/{PHONE_NUMBER_ID}/messages"
 
     try:
         logging.info("------------------- sending response ---------- %s",data)
@@ -304,9 +266,9 @@ def upload_doc_to_meta_cloud(document_path):
     print("-------------- Entered into upload_doc_to_meta_cloud function ----------------")
 
     headers = {
-        "Authorization": f"Bearer {settings.ACCESS_TOKEN}"
+        "Authorization": f"Bearer {ACCESS_TOKEN}"
     }
-    url = f"https://graph.facebook.com/{settings.VERSION}/{settings.PHONE_NUMBER_ID}/media"
+    url = f"https://graph.facebook.com/{VERSION}/{PHONE_NUMBER_ID}/media"
 
     # Determine the file type based on extension
     file_type = 'application/pdf'  # Since we're handling PDF files
@@ -371,9 +333,9 @@ def upload_audio_to_meta_cloud(audio_path):
     print("-------------- Uploading audio to Meta cloud ----------------")
 
     headers = {
-        "Authorization": f"Bearer {settings.ACCESS_TOKEN}"
+        "Authorization": f"Bearer {ACCESS_TOKEN}"
     }
-    url = f"https://graph.facebook.com/{settings.VERSION}/{settings.PHONE_NUMBER_ID}/media"
+    url = f"https://graph.facebook.com/{VERSION}/{PHONE_NUMBER_ID}/media"
     
     with open(audio_path, 'rb') as file:
         files = {
@@ -467,10 +429,6 @@ def update_session_data(phone_number,response_dict):
         session[phone_number]["data"].update(extracted_data)
         print("Updated session data:\n\n", session)  
 
-    # if not get_client_by_phone(phone_number) :
-        
-    #     insert_client(session[phone_number]['data'],phone_number)
-
 
 
 def process_whatsapp_message(body):
@@ -499,8 +457,7 @@ def process_whatsapp_message(body):
     else:
         response = "I can only process text and voice messages. Please send your message in either format."
 
-    # data = get_text_message_input(wa_id, response)
-    # send_message(data)
+
 
     try:
         print("---------------------- bot response --------------",response)
@@ -533,60 +490,14 @@ def process_whatsapp_message(body):
         data = get_text_message_input(wa_id, fallback_message)
         send_message(data)
 
-    # try:
-    #     print("----------------------bot response--------------",response)
-    #     # Try to parse response as JSON
-    #     json_match_1 = re.search(r'\{.*\}', response, re.DOTALL)
-    #     if json_match_1:
-    #         try:
-    #             response_dict = json.loads(json_match_1.group())                
-    #             if isinstance(response_dict, dict) and "service" in response_dict and "confirmation" in response_dict:
-    #                 if response_dict['service'] == 'GST' and response_dict["confirmation"]:
-    #                     service_type = response_dict["service"]
-    #                     document_path = "C:\\Users\\SENA1\\Desktop\\Whatapp bot\\python-whatsapp-bot\\app\\utils\\copy_gst_returns_sample.pdf"
-    #                     if document_path:
-    #                         media_id, uploaded_time = upload_doc_to_meta_cloud(document_path)
-    #                         if media_id:
-    #                             uploaded_status=send_document(wa_id, media_id, f"Here is your {service_type} document", uploaded_time)
-    #                             if uploaded_status == 200:
-    #                                 update_session_data(phone_number,response_dict)
-    #                                 session[phone_number]['data']['status'] = 'completed'
-    #                                 insert_response=insert_srn(session[phone_number]['data'],phone_number)
-    #                                 if insert_response == 201 :
-    #                                     message="✅ SRN created successfully for the service : "+ response_dict['sub_service']
-    #                                     data = get_text_message_input(wa_id,message)
-    #                                     send_message(data)
-
-    #                 else:
-    #                     update_session_data(phone_number,response_dict)
-    #                     insert_response=insert_srn(session[phone_number]['data'],phone_number) #default status pending
-    #                     if insert_response == 201 :
-    #                         message="✅ SRN created successfully for the service : "+ response_dict['sub_service']
-    #                         data = get_text_message_input(wa_id,message)
-    #                         send_message(data)
-    #                         return
-    #         except json.JSONDecodeError:
-    #             pass 
-            
-    #     else:
-    #         # Send both text and audio response
-    #         data = get_text_message_input(wa_id, response)
-    #         send_message(data)
-    #         # send_audio_response(wa_id, response)
-            
-    # except Exception as e:
-    #     logging.error(f"Error processing message: {str(e)}")
-    #     fallback_message = "Sorry, I encountered an error processing your request."
-    #     data = get_text_message_input(wa_id, fallback_message)
-    #     send_message(data)
-
+    
 def get_media_url(media_id):
     """Get the URL for downloading media content"""
     headers = {
-        "Authorization": f"Bearer {settings.ACCESS_TOKEN}"
+        "Authorization": f"Bearer {ACCESS_TOKEN}"
     }
     
-    url = f"https://graph.facebook.com/{settings.VERSION}/{media_id}"
+    url = f"https://graph.facebook.com/{VERSION}/{media_id}"
     
     try:
         response = requests.get(url, headers=headers)
@@ -603,7 +514,7 @@ def process_audio_to_text(audio_url):
     try:
         # Download the audio file
         headers = {
-            "Authorization": f"Bearer {settings.ACCESS_TOKEN}"
+            "Authorization": f"Bearer {ACCESS_TOKEN}"
         }
         audio_response = requests.get(audio_url, 
                                         headers=headers , 
@@ -652,44 +563,6 @@ def process_audio_to_text(audio_url):
         logging.error(f"Error processing audio: {str(e)}")
         return None
 
-# def validate_phone_number(data):
-
-#     # Replace these variables with your own values
-#     access_token = settings.ACCESS_TOKEN
-#     phone_number_id = settings.PHONE_NUMBER_ID
-#     verification_method = 'SMS'  # or 'VOICE'
-#     language_code = 'en_US'  # Language code for the verification message
-
-#     # Step 1: Request a verification code
-#     request_code_url = f'https://graph.facebook.com/v21.0/{phone_number_id}/request_code'
-#     headers = {
-#         'Authorization': f'Bearer {access_token}'
-#     }
-#     data = {
-#         'code_method': verification_method,
-#         'language': language_code
-#     }
-
-#     response = requests.post(request_code_url, headers=headers, data=data)
-#     if response.status_code == 200:
-#         print('Verification code sent successfully.')
-#     else:
-#         print(f'Failed to send verification code: {response.json()}')
-
-#     # Step 2: Verify the code received by the user
-#     verification_code = input('Enter the verification code received: ')
-#     verify_code_url = f'https://graph.facebook.com/v21.0/{phone_number_id}/verify_code'
-#     data = {
-#         'code': verification_code
-#     }
-
-#     response = requests.post(verify_code_url, headers=headers, data=data)
-#     if response.status_code == 200 and response.json().get('success'):
-#         print('Phone number verified successfully.')
-#         os.environ['is_Number_verified'] = True
-#     else:
-#         print(f'Failed to verify phone number: {response.json()}')
-
 
 
 def is_valid_whatsapp_message(body):
@@ -730,79 +603,3 @@ def is_session_expired(phone_number, timeout_minutes=30):
     last_activity = datetime.fromisoformat(sessions[phone_number]['last_activity'])
     return (datetime.now() - last_activity).total_seconds() > timeout_minutes * 60
 
-def create_zoho_lead(phone_number, message):
-    """Create a lead in Zoho CRM from WhatsApp message"""
-    try:
-        headers = {
-            "Authorization": f"Bearer {ZOHO_ACCESS_TOKEN}",
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "data": [{
-                "Phone": phone_number,
-                "Last_Name": f"WhatsApp User {phone_number}",
-                "Description": f"WhatsApp Message: {message}",
-                "Lead_Source": "WhatsApp"
-            }]
-        }
-        
-        response = requests.post(
-            f"{ZOHO_CRM_URL}/Leads",
-            headers=headers,
-            json=data
-        )
-        
-        if response.status_code == 201:
-            logging.info(f"✅ Lead created in Zoho CRM for {phone_number}")
-            return response.json()
-        else:
-            logging.error(f"❌ Failed to create lead in Zoho CRM: {response.text}")
-            return None
-            
-    except Exception as e:
-        logging.error(f"❌ Error creating Zoho CRM lead: {str(e)}")
-        return None
-
-def update_zoho_contact(phone_number, message):
-    """Update contact in Zoho CRM with new WhatsApp message"""
-    try:
-        # First search for existing contact
-        headers = {
-            "Authorization": f"Bearer {ZOHO_ACCESS_TOKEN}",
-            "Content-Type": "application/json"
-        }
-        
-        search_response = requests.get(
-            f"{ZOHO_CRM_URL}/Contacts/search",
-            headers=headers,
-            params={"criteria": f"(Phone:equals:{phone_number})"}
-        )
-        
-        if search_response.status_code == 200:
-            contacts = search_response.json().get('data', [])
-            
-            if contacts:
-                contact_id = contacts[0]['id']
-                # Update existing contact
-                update_data = {
-                    "data": [{
-                        "Description": f"Latest WhatsApp Message: {message}"
-                    }]
-                }
-                
-                update_response = requests.put(
-                    f"{ZOHO_CRM_URL}/Contacts/{contact_id}",
-                    headers=headers,
-                    json=update_data
-                )
-                
-                if update_response.status_code == 200:
-                    logging.info(f"✅ Updated contact in Zoho CRM for {phone_number}")
-                    return True
-                    
-        return False
-        
-    except Exception as e:
-        logging.error(f"❌ Error updating Zoho CRM contact: {str(e)}")
-        return False

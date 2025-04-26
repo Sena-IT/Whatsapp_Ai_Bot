@@ -2,9 +2,7 @@ import logging
 import hashlib
 import hmac
 from fastapi import Request, HTTPException, Depends
-from app.config import load_configurations
-
-settings = load_configurations()
+from config.env import APP_SECRET
 
 def validate_signature(payload: str, signature: str) -> bool:
     """
@@ -12,7 +10,7 @@ def validate_signature(payload: str, signature: str) -> bool:
     """
     # Use the App Secret to hash the payload
     expected_signature = hmac.new(
-        bytes(settings.APP_SECRET, "latin-1"),
+        bytes(str(APP_SECRET), "latin-1"),
         msg=payload.encode("utf-8"),
         digestmod=hashlib.sha256,
     ).hexdigest()
