@@ -1,0 +1,11 @@
+Lead Data - 20250417_163631
+==================================================
+name: Kailash
+email: kailash@example.com
+travel_location: India
+travel_date: May 2025
+no_of_days: 7
+no_of_persons: 3
+whatsapp: +91988997771
+tour_type: Family
+==================================================

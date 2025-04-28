@@ -1,109 +1,145 @@
+from fastapi import FastAPI, Request, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 import logging
-from fastapi import FastAPI, Request, Response, HTTPException, Depends
-from fastapi.responses import JSONResponse
-from app.config import load_configurations, configure_logging, Settings
-from app.utils.whatsapp_utils import process_whatsapp_message, is_valid_whatsapp_message
-from app.decorators.security import signature_required
-from typing import Optional
+import os
 import json
+import httpx
+from app.database import execute_query, get_db_cursor, commit_changes
+from app.routers.google_leads import google_router
+#from app.routers.facebook_lead import facebook_router
+from app.health import health_router
+from app.models import FacebookLead
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
+from fastapi.responses import PlainTextResponse
 
-# Initialize FastAPI app
-app = FastAPI(title="WhatsApp Bot API")
+env_path = r"D:\Sena Projects\test_aladdin_bot_cursor\.env"
+load_dotenv(dotenv_path=env_path)
 
-# Load configurations and configure logging
-configure_logging()
-settings = load_configurations()
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
+PAGE_ACCESS_TOKEN = os.getenv("CLIENT_GRAPH_API_ACCESS_TOKEN")
 
-print("SETTINGS",settings)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("app.log")
+    ]
+)
+logger = logging.getLogger(__name__)
 
-# @app.get("/webhook")
-# async def verify_webhook(
-#     hub_mode: str = None,
-#     hub_verify_token: str = None,
-#     hub_challenge: str = None
-# ):
-#     """Webhook verification endpoint for WhatsApp"""
-#     if not all([hub_mode, hub_verify_token]):
-#         raise HTTPException(
-#             status_code=400,
-#             detail="Missing parameters"
-#         )
-    
-#     if hub_mode == "subscribe" and hub_verify_token == settings.VERIFY_TOKEN:
-#         logging.info("WEBHOOK_VERIFIED")
-#         return Response(content=hub_challenge)
+app = FastAPI(title="Aladdin Holidays API", version="1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+@app.on_event("startup")
+async def startup_event():
+    execute_query("""
+        CREATE TABLE IF NOT EXISTS leads (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255),
+            email VARCHAR(255),
+            whatsapp_number VARCHAR(20),
+            travel_location VARCHAR(255),
+            travel_date VARCHAR(50),
+            no_of_days INTEGER,
+            no_of_persons INTEGER,
+            tour_type VARCHAR(50),
+            source VARCHAR(50),
+            created_at Timestamp DEFAULT CURRENT_TIMESTAMP,
+            updated_at Timestamp DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+ 
+# @app.api_route("/webhook-fb-test",methods=["GET", "POST"], response_class=PlainTextResponse)
+# async def verify_webhook(request: Request):
+#     if request.method == "GET":
+#         mode = request.query_params.get("hub.mode")
+#         token = request.query_params.get("hub.verify_token")
+#         challenge = request.query_params.get("hub.challenge")
+#         if mode == "subscribe" and token == VERIFY_TOKEN:
+#             logger.info("Webhook verified.")
+#             return Response(content=challenge, media_type="text/plain")
+#         logger.warning("Invalid token during webhook verification.")
+#         raise HTTPException(status_code=403, detail="Verification failed")
 #     else:
-#         logging.info("VERIFICATION_FAILED")
-#         raise HTTPException(
-#             status_code=403,
-#             detail="Verification failed"
-#         )
-    
+#         data = await request.json()
+#         print("Message received:", data.get("Message"))
+#         return PlainTextResponse("Webhook POST received", status_code=200)
 
-@app.get("/sample-webhook")
+from fastapi.responses import JSONResponse
+
+@app.api_route("/webhook-aladdin", methods=["GET", "POST"], response_class=PlainTextResponse)
 async def verify_webhook(request: Request):
-    """Webhook verification endpoint for WhatsApp"""
-    params = request.query_params
-
-    hub_mode = params.get("hub.mode")
-    hub_verify_token = params.get("hub.verify_token")
-    hub_challenge = params.get("hub.challenge")
-
-    if not hub_mode or not hub_verify_token or not hub_challenge:
-        logging.error("🚨 Missing parameters in webhook verification request")
-        raise HTTPException(status_code=400, detail="Missing parameters")
-
-    if hub_mode == "subscribe" and hub_verify_token == settings.VERIFY_TOKEN:
-        print("**************",hub_verify_token)
-        logging.info("✅ WEBHOOK_VERIFIED")
-        return Response(content=hub_challenge, media_type="text/plain")
-    else:
-        logging.error("❌ VERIFICATION_FAILED: Invalid token")
+    if request.method == "GET":
+        mode = request.query_params.get("hub.mode")
+        token = request.query_params.get("hub.verify_token")
+        challenge = request.query_params.get("hub.challenge")
+        if mode == "subscribe" and token == VERIFY_TOKEN:
+            print("✅ Webhook verified")
+            return challenge
         raise HTTPException(status_code=403, detail="Verification failed")
 
-
-
-
-@app.post("/sample-webhook")
-async def webhook_handler(
-    request: Request,
-    verified: bool = Depends(signature_required)
-):
-    """Handle incoming webhook events from the WhatsApp API"""
+    # POST handling
     try:
-        body = await request.json()
-    except json.JSONDecodeError:
-        logging.error("Failed to decode JSON")
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid JSON provided"
-        )
-
-    # Check if it's a WhatsApp status update
-    if (body.get("entry", [{}])[0]
-        .get("changes", [{}])[0]
-        .get("value", {})
-        .get("statuses")):
-        logging.info("Received a WhatsApp status update.")
-        print("--------status body---------", body)
-        return {"status": "ok"}
-
-    try:
-        if is_valid_whatsapp_message(body):
-            process_whatsapp_message(body)
-            return {"status": "ok"}
-        else:
-            raise HTTPException(
-                status_code=404,
-                detail="Not a WhatsApp API event"
-            )
+        payload = await request.json()
+        print("📩 Incoming POST from Meta:", json.dumps(payload, indent=2))
+        return JSONResponse({"status": "received"})
     except Exception as e:
-        logging.error(f"Error processing message: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error"
-        )
+        print(f"❌ Error parsing POST: {e}")
+        raise HTTPException(status_code=400, detail="Invalid payload")
+
+
+
+
+# @app.get("/fbb-webhook", response_class=PlainTextResponse)
+# async def verify_webhook(request: Request):
+#     params = dict(request.query_params)
+#     if params.get("hub.verify_token") == VERIFY_TOKEN:
+#         return params.get("hub.challenge")
+#     return "Invalid verify token"
+
+# @app.post("/fbb-webhook")
+# async def capture_lead(request: Request):
+#     data = await request.json()
+#     print("📩 FB Payload:", json.dumps(data, indent=2))
+
+#     try:
+#         lead_id = data["entry"][0]["changes"][0]["value"]["leadgen_id"]
+#         print(f"✅ Captured Lead ID: {lead_id}")
+
+#         # Fetch lead details from Facebook
+#         lead_url = f"https://graph.facebook.com/v19.0/{lead_id}?access_token={PAGE_ACCESS_TOKEN}"
+#         async with httpx.AsyncClient() as client:
+#             response = await client.get(lead_url)
+#             lead_data = response.json()
+
+#         print("📥 Full Lead Data:", json.dumps(lead_data, indent=2))
+
+#         # Save to JSON file
+#         lead_path = r'D:\Sena Projects\test_aladdin_bot_cursor\leads_json'
+#         with open(lead_path, "w") as f:
+#             json.dump(lead_data, f, indent=2)
+
+#         return {"status": "lead captured", "lead_id": lead_id}
+    
+#     except Exception as e:
+#         print(f"❌ Error: {e}")
+#         return {"error": "Failed to process lead"}
+
+app.include_router(google_router)
+app.include_router(health_router)
+# app.include_router(facebook_router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True) 
+    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)

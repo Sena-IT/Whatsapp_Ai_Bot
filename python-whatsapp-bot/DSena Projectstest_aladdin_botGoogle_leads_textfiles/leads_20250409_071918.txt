@@ -1,0 +1,11 @@
+Lead Data - 20250409_071918
+==================================================
+name: Robert Tony
+email: tonystark@example.com
+travel_location: Singapore
+travel_date: May 2025
+no_of_days: 7
+no_of_persons: 2
+whatsapp: +919323245671
+tour_type: Friends
+==================================================

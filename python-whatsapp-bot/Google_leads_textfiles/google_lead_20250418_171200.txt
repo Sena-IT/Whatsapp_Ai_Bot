@@ -1,0 +1,12 @@
+Lead Data - 20250418_171200
+==================================================
+name: Arun
+email: arun@example.com
+travel_location: Singapore
+travel_date: May 2025
+no_of_days: 7
+no_of_persons: 3
+whatsapp: +91988997767
+tour_type: Family
+source: Google SEO
+==================================================

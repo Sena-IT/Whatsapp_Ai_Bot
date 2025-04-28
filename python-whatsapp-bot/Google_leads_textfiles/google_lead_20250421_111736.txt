@@ -1,0 +1,12 @@
+Lead Data - 20250421_111736
+==================================================
+name: test1
+email: test1@example.com
+travel_location: Zew Zealand
+travel_date: May 2025
+no_of_days: 10
+no_of_persons: 3
+whatsapp: +919323245981
+tour_type: Family
+source: Google SEO
+==================================================

@@ -1,0 +1,12 @@
+Lead Data - 20250418_110303
+==================================================
+name: Kailuuuu
+email: Kailuuuu@example.com
+travel_location: India
+travel_date: Aug 2025
+no_of_days: 7
+no_of_persons: 3
+whatsapp: +91988987771
+tour_type: Friends
+source: Google SEO
+==================================================

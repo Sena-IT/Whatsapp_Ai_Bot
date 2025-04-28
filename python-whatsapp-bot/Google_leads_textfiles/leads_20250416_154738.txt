@@ -1,0 +1,11 @@
+Lead Data - 20250416_154738
+==================================================
+name: Mani
+email: Mani@example.com
+travel_location: India
+travel_date: June 2025
+no_of_days: 7
+no_of_persons: 3
+whatsapp: +91988990671
+tour_type: Friends
+==================================================
