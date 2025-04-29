@@ -6408,3 +6408,91 @@ fastapi.exceptions.HTTPException
 2025-04-23 19:09:44,121 - app.database - INFO - Successfully connected to the database
 2025-04-23 19:09:44,124 - app.database - INFO - Transaction committed successfully
 2025-04-23 19:09:44,124 - app.database - INFO - Database connection closed
+2025-04-29 06:55:38,758 - app.database - INFO - Using database credentials: host=host.docker.internal, port=5432, db=Aladdin_Leads_Db, user=postgres
+2025-04-29 06:55:38,765 - app.database - WARNING - Connection attempt 1 failed: could not translate host name "host.docker.internal" to address: Name or service not known
+
+2025-04-29 06:55:38,766 - app.database - INFO - Retrying in 2 seconds...
+2025-04-29 06:55:40,769 - app.database - WARNING - Connection attempt 2 failed: could not translate host name "host.docker.internal" to address: Name or service not known
+
+2025-04-29 06:55:40,769 - app.database - INFO - Retrying in 2 seconds...
+2025-04-29 06:55:42,771 - app.database - WARNING - Connection attempt 3 failed: could not translate host name "host.docker.internal" to address: Name or service not known
+
+2025-04-29 06:55:42,771 - app.database - INFO - Retrying in 2 seconds...
+2025-04-29 06:55:44,773 - app.database - WARNING - Connection attempt 4 failed: could not translate host name "host.docker.internal" to address: Name or service not known
+
+2025-04-29 06:55:44,773 - app.database - INFO - Retrying in 2 seconds...
+2025-04-29 06:55:46,776 - app.database - ERROR - Failed to connect to database after 5 attempts: could not translate host name "host.docker.internal" to address: Name or service not known
+
+2025-04-29 06:55:46,776 - app.database - ERROR - Please check:
+2025-04-29 06:55:46,776 - app.database - ERROR - 1. PostgreSQL service is running
+2025-04-29 06:55:46,776 - app.database - ERROR - 2. Database credentials in .env file are correct
+2025-04-29 06:55:46,776 - app.database - ERROR - 3. Database 'Aladdin_Leads_Db' exists
+2025-04-29 06:55:46,776 - app.database - ERROR - 4. User has correct permissions
+2025-04-29 06:55:46,776 - app.database - ERROR - Current connection details: {'host': 'host.docker.internal', 'port': '5432', 'database': 'Aladdin_Leads_Db', 'user': 'postgres', 'password': 'Balji@1234'}
+2025-04-29 07:02:10,062 - app.database - INFO - Using database credentials: host=db, port=5432, db=Aladdin_Leads_Db, user=postgres
+2025-04-29 07:02:10,063 - app.database - WARNING - Connection attempt 1 failed: could not translate host name "db" to address: Temporary failure in name resolution
+
+2025-04-29 07:02:10,063 - app.database - INFO - Retrying in 2 seconds...
+2025-04-29 07:02:12,065 - app.database - WARNING - Connection attempt 2 failed: could not translate host name "db" to address: Temporary failure in name resolution
+
+2025-04-29 07:02:12,065 - app.database - INFO - Retrying in 2 seconds...
+2025-04-29 07:02:14,066 - app.database - WARNING - Connection attempt 3 failed: could not translate host name "db" to address: Temporary failure in name resolution
+
+2025-04-29 07:02:14,066 - app.database - INFO - Retrying in 2 seconds...
+2025-04-29 07:02:16,067 - app.database - WARNING - Connection attempt 4 failed: could not translate host name "db" to address: Temporary failure in name resolution
+
+2025-04-29 07:02:16,068 - app.database - INFO - Retrying in 2 seconds...
+2025-04-29 07:02:18,069 - app.database - ERROR - Failed to connect to database after 5 attempts: could not translate host name "db" to address: Temporary failure in name resolution
+
+2025-04-29 07:02:18,069 - app.database - ERROR - Please check:
+2025-04-29 07:02:18,069 - app.database - ERROR - 1. PostgreSQL service is running
+2025-04-29 07:02:18,069 - app.database - ERROR - 2. Database credentials in .env file are correct
+2025-04-29 07:02:18,069 - app.database - ERROR - 3. Database 'Aladdin_Leads_Db' exists
+2025-04-29 07:02:18,070 - app.database - ERROR - 4. User has correct permissions
+2025-04-29 07:02:18,070 - app.database - ERROR - Current connection details: {'host': 'db', 'port': '5432', 'database': 'Aladdin_Leads_Db', 'user': 'postgres', 'password': 'Balji@1234'}
+2025-04-29 07:18:59,461 - app.database - INFO - Using database credentials: host=db, port=5432, db=Aladdin_Leads_Db, user=postgres
+2025-04-29 07:18:59,557 - app.database - INFO - Successfully connected to the database
+2025-04-29 07:18:59,596 - app.database - INFO - Transaction committed successfully
+2025-04-29 07:18:59,596 - app.database - INFO - Database connection closed
+2025-04-29 09:15:13,371 - app.database - INFO - Using database credentials: host=db, port=5432, db=Aladdin_Leads_Db, user=postgres
+2025-04-29 09:15:13,402 - app.database - INFO - Successfully connected to the database
+2025-04-29 09:15:13,405 - app.database - INFO - Transaction committed successfully
+2025-04-29 09:15:13,405 - app.database - INFO - Database connection closed
+2025-04-29 09:20:11,380 - app.database - INFO - Using database credentials: host=db, port=5432, db=Aladdin_Leads_Db, user=postgres
+2025-04-29 09:20:11,403 - app.database - INFO - Successfully connected to the database
+2025-04-29 09:20:11,405 - app.database - INFO - Transaction committed successfully
+2025-04-29 09:20:11,405 - app.database - INFO - Database connection closed
+2025-04-29 09:24:24,450 - app.database - INFO - Using database credentials: host=db, port=5432, db=Aladdin_Leads_Db, user=postgres
+2025-04-29 09:24:24,466 - app.database - INFO - Successfully connected to the database
+2025-04-29 09:24:24,467 - app.database - INFO - Transaction committed successfully
+2025-04-29 09:24:24,468 - app.database - INFO - Database connection closed
+2025-04-29 09:24:31,069 - app.routers.google_leads - INFO - Received lead from Google SEO: {'name': 'Kane Williamson', 'email': 'kane@example.com', 'travel_location': 'Zew Zealand', 'travel_date': 'May 2025', 'no_of_days': 10, 'no_of_persons': 3, 'whatsapp': '+919323245981', 'tour_type': 'Family'}
+2025-04-29 09:24:31,069 - app.routers.google_leads - INFO - Lead data with source added: {'name': 'Kane Williamson', 'email': 'kane@example.com', 'travel_location': 'Zew Zealand', 'travel_date': 'May 2025', 'no_of_days': 10, 'no_of_persons': 3, 'whatsapp': '+919323245981', 'tour_type': 'Family', 'source': 'Google SEO'}
+2025-04-29 09:24:31,069 - app.routers.google_leads - INFO - Validated lead data: {'name': 'Kane Williamson', 'email': 'kane@example.com', 'travel_location': 'Zew Zealand', 'travel_date': 'May 2025', 'no_of_days': 10, 'no_of_persons': 3, 'whatsapp': '+919323245981', 'tour_type': 'Family', 'source': 'Google SEO'}
+2025-04-29 09:24:31,070 - app.routers.google_leads - INFO - Lead data saved to D:\Sena Projects\test_aladdin_bot_cursor\Google_leads_textfiles/google_lead_20250429_092431.txt
+2025-04-29 09:24:31,070 - app.database - INFO - Using database credentials: host=db, port=5432, db=Aladdin_Leads_Db, user=postgres
+2025-04-29 09:24:31,078 - app.database - INFO - Successfully connected to the database
+2025-04-29 09:24:31,083 - app.routers.google_leads - INFO - Lead from Google SEO stored in DB with ID: 1
+2025-04-29 09:24:31,083 - root - INFO - 🔍 Token request payload: {'refresh_token': '1000.ca54ae7fbf57011285bb598533496e8f.81263f0f6fb56e44ee8d7095e64bf8e6', 'client_id': '1000.TUC1L7UZIQUE8V8JP88FR4SPDQS65L', 'client_secret': '4d85e8c79585fefb1bba5168989bdc9fad9874c4c2', 'grant_type': 'refresh_token'}
+2025-04-29 09:24:31,197 - root - INFO - ✅ Zoho access token: 1000.988f0d9b59c5176f64c63e678fe7c1df.4cd1a33c5e4cca71363242a8c1b49a75
+2025-04-29 09:24:31,199 - app.zoho_integration - INFO - 📤 Sending lead to Zoho CRM: {'data': [{'First_Name': 'Kane', 'Last_Name': 'Williamson', 'Company': 'Aladdin Holidays', 'Email': 'kane@example.com', 'Phone': '+919323245981', 'Lead_Source': 'Google SEO', 'Tour_Type': 'Family', 'Location': 'Zew Zealand', 'Travels_Date': 'May 2025', 'Days': '10', 'Persons': '3'}]}
+2025-04-29 09:24:31,642 - httpx - INFO - HTTP Request: POST https://www.zohoapis.in/crm/v2/Leads "HTTP/1.1 201 "
+2025-04-29 09:24:31,643 - app.zoho_integration - INFO - ✅ Zoho CRM Response: {'data': [{'code': 'SUCCESS', 'details': {'Modified_Time': '2025-04-29T14:54:31+05:30', 'Modified_By': {'name': 'Balaji', 'id': '906080000000395001'}, 'Created_Time': '2025-04-29T14:54:31+05:30', 'id': '906080000000470002', 'Created_By': {'name': 'Balaji', 'id': '906080000000395001'}}, 'message': 'record added', 'status': 'success'}]}
+2025-04-29 09:24:31,643 - app.routers.google_leads - INFO - Zoho CRM response for Google SEO lead: {'data': [{'code': 'SUCCESS', 'details': {'Modified_Time': '2025-04-29T14:54:31+05:30', 'Modified_By': {'name': 'Balaji', 'id': '906080000000395001'}, 'Created_Time': '2025-04-29T14:54:31+05:30', 'id': '906080000000470002', 'Created_By': {'name': 'Balaji', 'id': '906080000000395001'}}, 'message': 'record added', 'status': 'success'}]}
+2025-04-29 09:24:31,644 - app.database - INFO - Transaction committed successfully
+2025-04-29 09:24:31,645 - app.database - INFO - Database connection closed
+2025-04-29 09:26:12,369 - app.routers.google_leads - INFO - Received lead from Google Ad: {'name': 'Kane Williamson', 'email': 'kane@example.com', 'travel_location': 'Zew Zealand', 'travel_date': 'May 2025', 'no_of_days': 10, 'no_of_persons': 3, 'whatsapp': '+919323245981', 'tour_type': 'Family'}
+2025-04-29 09:26:12,369 - app.routers.google_leads - INFO - Lead data with source added: {'name': 'Kane Williamson', 'email': 'kane@example.com', 'travel_location': 'Zew Zealand', 'travel_date': 'May 2025', 'no_of_days': 10, 'no_of_persons': 3, 'whatsapp': '+919323245981', 'tour_type': 'Family', 'source': 'Google Ad'}
+2025-04-29 09:26:12,370 - app.routers.google_leads - INFO - Validated lead data: {'name': 'Kane Williamson', 'email': 'kane@example.com', 'travel_location': 'Zew Zealand', 'travel_date': 'May 2025', 'no_of_days': 10, 'no_of_persons': 3, 'whatsapp': '+919323245981', 'tour_type': 'Family', 'source': 'Google Ad'}
+2025-04-29 09:26:12,370 - app.routers.google_leads - INFO - Lead data saved to D:\Sena Projects\test_aladdin_bot_cursor\Google_leads_textfiles/google_lead_20250429_092612.txt
+2025-04-29 09:26:12,370 - app.database - INFO - Using database credentials: host=db, port=5432, db=Aladdin_Leads_Db, user=postgres
+2025-04-29 09:26:12,377 - app.database - INFO - Successfully connected to the database
+2025-04-29 09:26:12,379 - app.routers.google_leads - INFO - Lead from Google Ad stored in DB with ID: 2
+2025-04-29 09:26:12,379 - root - INFO - 🔍 Token request payload: {'refresh_token': '1000.ca54ae7fbf57011285bb598533496e8f.81263f0f6fb56e44ee8d7095e64bf8e6', 'client_id': '1000.TUC1L7UZIQUE8V8JP88FR4SPDQS65L', 'client_secret': '4d85e8c79585fefb1bba5168989bdc9fad9874c4c2', 'grant_type': 'refresh_token'}
+2025-04-29 09:26:12,501 - root - INFO - ✅ Zoho access token: 1000.b7c49b9565321f1f935faedb07593f0c.40b21b7fe59d81fea329ca80055ef04a
+2025-04-29 09:26:12,503 - app.zoho_integration - INFO - 📤 Sending lead to Zoho CRM: {'data': [{'First_Name': 'Kane', 'Last_Name': 'Williamson', 'Company': 'Aladdin Holidays', 'Email': 'kane@example.com', 'Phone': '+919323245981', 'Lead_Source': 'Google Ad', 'Tour_Type': 'Family', 'Location': 'Zew Zealand', 'Travels_Date': 'May 2025', 'Days': '10', 'Persons': '3'}]}
+2025-04-29 09:26:12,868 - httpx - INFO - HTTP Request: POST https://www.zohoapis.in/crm/v2/Leads "HTTP/1.1 201 "
+2025-04-29 09:26:12,869 - app.zoho_integration - INFO - ✅ Zoho CRM Response: {'data': [{'code': 'SUCCESS', 'details': {'Modified_Time': '2025-04-29T14:56:12+05:30', 'Modified_By': {'name': 'Balaji', 'id': '906080000000395001'}, 'Created_Time': '2025-04-29T14:56:12+05:30', 'id': '906080000000471001', 'Created_By': {'name': 'Balaji', 'id': '906080000000395001'}}, 'message': 'record added', 'status': 'success'}]}
+2025-04-29 09:26:12,869 - app.routers.google_leads - INFO - Zoho CRM response for Google Ad lead: {'data': [{'code': 'SUCCESS', 'details': {'Modified_Time': '2025-04-29T14:56:12+05:30', 'Modified_By': {'name': 'Balaji', 'id': '906080000000395001'}, 'Created_Time': '2025-04-29T14:56:12+05:30', 'id': '906080000000471001', 'Created_By': {'name': 'Balaji', 'id': '906080000000395001'}}, 'message': 'record added', 'status': 'success'}]}
+2025-04-29 09:26:12,870 - app.database - INFO - Transaction committed successfully
+2025-04-29 09:26:12,870 - app.database - INFO - Database connection closed
