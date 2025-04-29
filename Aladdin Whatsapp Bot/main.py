@@ -143,12 +143,12 @@ app.include_router(health_router)
 
 
 # Handle Google SEO leads
-@google_router.post("/google-seo-lead")
+@app.post("/google-seo-lead")
 async def google_seo_lead(request: Request):
     return await process_landing_page_lead(request, source="Google SEO")
 
 # Handle Google Ad landing page leads
-@google_router.post("/google-ad-lead")
+@app.post("/google-ad-lead")
 async def google_ad_lead(request: Request):
     return await process_landing_page_lead(request, source="Google Ad")
 
