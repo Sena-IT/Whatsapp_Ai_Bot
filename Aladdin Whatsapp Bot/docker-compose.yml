@@ -2,23 +2,22 @@ version: '3.8'
 
 services:
   web:
-    build:
+    build: 
       context: .
       dockerfile: utils/Dockerfile
     ports:
       - "5000:5000"
     environment:
-      - DB_HOST=db
+      - DB_HOST=host.docker.internal
       - DB_PORT=5432
       - DB_NAME=Aladdin_Leads_Db
       - DB_USER=postgres
       - DB_PASSWORD=Balji@1234
+    network_mode: host  # This allows the container to use the host's network
     volumes:
       - .:/app
     depends_on:
       - db
-    networks:
-      - app-network
 
   db:
     image: postgres:15
@@ -30,8 +29,7 @@ services:
       - POSTGRES_PASSWORD=Balji@1234
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks:
-      - app-network
+    network_mode: host  # This allows the container to use the host's network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -43,4 +41,4 @@ volumes:
 
 networks:
   app-network:
-    driver: bridge
+    driver: bridge 
