@@ -10,8 +10,8 @@ import traceback
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
-env_path = r"D:\Sena Projects\test_aladdin_bot_cursor\.env"
-load_dotenv(dotenv_path=env_path)
+# env_path = r"D:\Sena Projects\test_aladdin_bot_cursor\.env"
+load_dotenv()
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -47,16 +47,6 @@ def save_to_text_file(lead_data: dict):
         logger.error(f"Error saving to text file: {str(e)}")
         raise
 
-
-# Handle Google SEO leads
-@google_router.post("/google-seo-lead")
-async def google_seo_lead(request: Request):
-    return await process_landing_page_lead(request, source="Google SEO")
-
-# Handle Google Ad landing page leads
-@google_router.post("/google-ad-lead")
-async def google_ad_lead(request: Request):
-    return await process_landing_page_lead(request, source="Google Ad")
 
 # Common logic to handle Google leads
 async def process_landing_page_lead(request: Request, source: str):

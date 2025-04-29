@@ -8,8 +8,8 @@ from app.models import ZohoLeadData
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
-env_path = r"D:\Sena Projects\test_aladdin_bot_cursor\.env"
-load_dotenv(dotenv_path=env_path)
+# env_path = r"D:\Sena Projects\test_aladdin_bot_cursor\.env"
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 print("REFRESH TOKEN LOADED:888888888", os.getenv("ZOHO_REFRESH_TOKEN"))

@@ -13,9 +13,10 @@ from app.models import FacebookLead
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 from fastapi.responses import PlainTextResponse
+from app.routers.google_leads import process_landing_page_lead
 
-env_path = r"D:\Sena Projects\test_aladdin_bot_cursor\.env"
-load_dotenv(dotenv_path=env_path)
+# env_path = r"D:\Sena Projects\test_aladdin_bot_cursor\.env"
+load_dotenv()
 
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 PAGE_ACCESS_TOKEN = os.getenv("CLIENT_GRAPH_API_ACCESS_TOKEN")
@@ -139,6 +140,18 @@ async def verify_webhook(request: Request):
 app.include_router(google_router)
 app.include_router(health_router)
 # app.include_router(facebook_router)
+
+
+# Handle Google SEO leads
+@google_router.post("/google-seo-lead")
+async def google_seo_lead(request: Request):
+    return await process_landing_page_lead(request, source="Google SEO")
+
+# Handle Google Ad landing page leads
+@google_router.post("/google-ad-lead")
+async def google_ad_lead(request: Request):
+    return await process_landing_page_lead(request, source="Google Ad")
+
 
 if __name__ == "__main__":
     import uvicorn

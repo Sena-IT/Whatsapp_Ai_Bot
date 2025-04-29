@@ -4,8 +4,8 @@ import os
 from dotenv import load_dotenv
 import logging
 import time
-env_path = r"D:\Sena Projects\test_aladdin_bot_cursor\.env"
-load_dotenv(dotenv_path=env_path)
+# env_path = r"D:\Sena Projects\test_aladdin_bot_cursor\.env"
+load_dotenv()
 # Configure logging to show in terminal
 logging.basicConfig(
     level=logging.INFO,
