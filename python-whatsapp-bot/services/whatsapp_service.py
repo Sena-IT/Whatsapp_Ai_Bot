@@ -23,27 +23,18 @@ class WhatsAppService:
 
     @staticmethod
     async def handle_webhook(body: dict) -> dict:
-        """Handle incoming webhook events from the WhatsApp API"""
-        # Check if it's a WhatsApp status update
-        if (body.get("entry", [{}])[0]
-            .get("changes", [{}])[0]
-            .get("value", {})
-            .get("statuses")):
+        """Handle incoming webhook events from the WhatsApp API."""
+        if body.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {}).get("statuses"):
             logging.info("Received a WhatsApp status update.")
             return {"status": "ok"}
 
         try:
-            if is_valid_whatsapp_message(body):
-                process_whatsapp_message(body)
+            is_valid, wa_id, profile_name, message = is_valid_whatsapp_message(body)
+            if is_valid:
+                await process_whatsapp_message(body)  # Await the async call
                 return {"status": "ok"}
             else:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Not a WhatsApp API event"
-                )
+                raise HTTPException(status_code=404, detail="Not a WhatsApp API event")
         except Exception as e:
             logging.error(f"Error processing message: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail="Internal server error"
-            ) 
+            raise HTTPException(status_code=500, detail="Internal server error")

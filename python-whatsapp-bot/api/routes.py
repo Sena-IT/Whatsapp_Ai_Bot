@@ -29,14 +29,11 @@ async def webhook_handler(
     request: Request,
     verified: bool = Depends(signature_required)
 ):
-    """Handle incoming webhook events from the WhatsApp API"""
+    """Handle incoming webhook events from the WhatsApp API."""
     try:
         body = await request.json()
     except json.JSONDecodeError:
         logging.error("Failed to decode JSON")
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid JSON provided"
-        )
+        raise HTTPException(status_code=400, detail="Invalid JSON provided")
 
     return await WhatsAppService.handle_webhook(body)
