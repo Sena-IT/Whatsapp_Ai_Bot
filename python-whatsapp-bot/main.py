@@ -1,26 +1,18 @@
-import logging
 from fastapi import FastAPI
+from config.env import validate_env
 from api.routes import webhook_router
 
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+# Validate environment variables
+validate_env()
 
-
-# Initialize FastAPI app
-app = FastAPI(title="WhatsApp Bot API")
-
-
-app.include_router(webhook_router)    
-
+import logging
+logging.basicConfig(level=logging.INFO)
+# Create FastAPI app
+app = FastAPI()
 @app.get("/")
-def read_root():
-    return {"message": "Welcome to the WhatsApp Bot Server"}
+async def root():
+    return {"status": "ok"}
 
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
+# Include webhook routes
+app.include_router(webhook_router)

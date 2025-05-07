@@ -1,4 +1,4 @@
-#ngrok http --url=many-better-bison.ngrok-free.app 8000
+#ngrok http --url=many-better-bison.ngrok-free.app 7860
 #uvicorn main:app --reload
 
 # Build AI WhatsApp Bots with Pure Python

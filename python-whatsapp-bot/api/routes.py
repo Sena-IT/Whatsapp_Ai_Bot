@@ -1,8 +1,9 @@
 import json
 import logging
-from schema.decorators.security import signature_required
-from fastapi import APIRouter, Request, Response, HTTPException, Depends
+from fastapi import APIRouter, Request, Response, Depends
 from services.whatsapp_service import WhatsAppService
+from schema.decorators.security import signature_required
+from config.env import VERIFY_TOKEN
 
 logger = logging.getLogger(__name__)
 
@@ -11,29 +12,27 @@ webhook_router = APIRouter()
 
 @webhook_router.get("/sentos-webhook")
 async def verify_webhook(request: Request):
-    """Webhook verification endpoint for WhatsApp"""
     params = request.query_params
-
-    hub_mode = params.get("hub.mode")
-    hub_verify_token = params.get("hub.verify_token")
-    hub_challenge = params.get("hub.challenge")
-
-    challenge = await WhatsAppService.verify_webhook(hub_mode, hub_verify_token, hub_challenge)
+    challenge = await WhatsAppService.verify_webhook(
+        params.get("hub.mode"),
+        params.get("hub.verify_token"),
+        params.get("hub.challenge"),
+        VERIFY_TOKEN,
+    )
     return Response(content=challenge, media_type="text/plain")
 
 
-
-
 @webhook_router.post("/sentos-webhook")
-async def webhook_handler(
-    request: Request,
-    verified: bool = Depends(signature_required)
-):
-    """Handle incoming webhook events from the WhatsApp API."""
+async def webhook_handler(request: Request, _: bool = Depends(signature_required)):
     try:
         body = await request.json()
-    except json.JSONDecodeError:
-        logging.error("Failed to decode JSON")
-        raise HTTPException(status_code=400, detail="Invalid JSON provided")
+    except Exception:
+        # non-JSON payload (e.g. Meta “ping” call) – just acknowledge
+        return {"status": "ignored"}
 
-    return await WhatsAppService.handle_webhook(body)
+    try:
+        return await WhatsAppService.handle_webhook(body)
+    except Exception as exc:
+        # log the problem but still return 200 so Meta stops retrying
+        logger.error(f"Webhook processing error: {exc}")
+        return {"status": "error_logged"}

@@ -1,0 +1,467 @@
+"""
+Central coordinator: WhatsApp event → LLM → reply.
+Now supports GREETING → REQUIREMENT → PLANNING with live backend data.
+"""
+
+import asyncio
+import logging
+from typing import Dict, Any, List
+import datetime
+import locale
+locale.setlocale(locale.LC_ALL, 'en_IN.utf8')
+
+from services.session_service import session_svc
+from services.whatsapp_client import whatsapp_client
+from services.llm_orchestrator import llm
+from services import backend_client
+
+from utils.whatsapp_utils import extract_message_details, transcribe_audio_from_whatsapp
+
+logger = logging.getLogger(__name__)
+
+
+REQ_KEYS = ["destination_city", "travellers", "departure_city",
+            "budget_inr", "start_date", "end_date"]
+
+
+def _complete(req: dict) -> bool:
+    return all(req.get(k) for k in REQ_KEYS)
+
+def _should_show_sheet(session: dict, updated: dict) -> bool:
+    """
+    Show the requirement sheet only when:
+      • we are still in REQUIREMENT, and
+      • at least one field was updated in this turn
+    """
+    return session["state"] == "REQUIREMENT" and bool(updated)
+
+
+class ConversationFlow:
+    
+
+    async def handle_event(self, body: Dict[str, Any]) -> None:
+        ok, wa_id, profile_name, payload = extract_message_details(body)
+        if not ok:
+            return
+        
+        await self._process(wa_id, profile_name, payload)
+
+    # =================== MAIN STATE MACHINE ========================= #
+    async def _process(self, wa_id: str, profile_name: str, payload: Dict[str, Any]):
+        s = session_svc.get(wa_id)
+
+        # ---- new visitor ------------------------------------------- #
+        if not s:
+            await session_svc.init_session(wa_id, profile_name)
+            await whatsapp_client.send_reply_buttons(
+                wa_id,
+                header="Welcome to Sena Holidays!",
+                body=f"Hello {profile_name}! I'm Lila, your travel planning assistant.",
+                buttons=[{"id": "start_planning", "title": "Start Planning"}],
+            )
+            return
+
+        # ---- duplicate WA delivery? -------------------------------- #
+        if payload.get("meta", {}).get("message_id") == s.get("last_msg_id"):
+            return
+        s["last_msg_id"] = payload.get("meta", {}).get("message_id")
+
+        msg_type = payload["type"]
+        msg_text = payload["text"]
+        meta = payload.get("meta", {})
+
+        if s["state"] == "PLANNING":
+            await _planning_loop(wa_id, s, msg_type, msg_text, meta)
+            return
+    
+        # ---- GREETING → REQUIREMENT trigger ------------------------ #
+        if s["state"] == "GREETING":
+            if msg_type == "interactive" and meta.get("button_id") == "start_planning":
+                await session_svc.set_state(wa_id, "REQUIREMENT")
+                await whatsapp_client.send_text(
+                    wa_id,
+                    "Awesome – I'd love to help you plan your trip! "
+                    "Let's figure out the details below. 😊",
+                )
+                await whatsapp_client.send_text(wa_id, _sheet(s))
+            return
+
+        # ---- REQUIREMENT interactive destination pick -------------- #
+        if s["state"] == "REQUIREMENT" and msg_type == "interactive":
+            list_id = meta.get("list_id") or meta.get("button_id")
+            if list_id and list_id.startswith("dest_"):
+                city = list_id.split("_", 1)[1].title()
+                await session_svc.update_requirements(wa_id, {"destination_city": city})
+                await whatsapp_client.send_text(wa_id, f"Great choice – {city} it is! 🛫")
+                if _should_show_sheet(s, {"destination_city": city}):
+                    await whatsapp_client.send_text(wa_id, _sheet(s))
+                return
+
+        # ---- voice → text ------------------------------------------ #
+        if msg_type == "audio":
+            tr = await transcribe_audio_from_whatsapp(meta["audio_id"])
+            if tr:
+                await whatsapp_client.send_text(wa_id, f"I heard: “{tr}”")
+                msg_text = tr
+            else:
+                await whatsapp_client.send_text(wa_id, "Sorry, didn't catch that. Please type 🙂")
+                return
+
+        # ---- LLM call --------------------------------------------- #
+        resp = await llm.generate_response(s, msg_text)
+        logger.info("LLM result: %s", resp)
+
+        if resp.get("update"):
+            await session_svc.update_requirements(wa_id, resp["update"])
+            if _should_show_sheet(s, resp["update"]):
+                await whatsapp_client.send_text(wa_id, _sheet(s))
+
+        # ---- auto flip to PLANNING --------------------------------- #
+        if s["state"] == "REQUIREMENT" and _complete(s["requirements"]):
+            await session_svc.set_state(wa_id, "PLANNING")
+            await whatsapp_client.send_text(
+                wa_id,
+                "✅ All set! Let's plan flights, hotels and fun activities next. "
+                "What would you like to start with?",
+            )
+            await _planning_loop(wa_id, s, "", "", {})
+            return  
+
+        # ---- still in REQUIREMENT: maybe send suggestions ---------- #
+        if (
+            s["state"] == "REQUIREMENT"
+            and not s["requirements"]["destination_city"]
+            and not s.get("suggestions_shown")
+        ):
+            s["suggestions_shown"] = True
+            await _send_destinations_bundle(wa_id)
+
+        # ---- in PLANNING ------------------------------------------- #
+        
+
+        # ---- default reply ----------------------------------------- #
+        await whatsapp_client.send_text(wa_id, resp["reply"])
+        s["history"].extend([f"User: {msg_text}", f"Bot: {resp['reply']}"])
+
+
+def _travellers_block(trav_list):
+    if not trav_list:
+        return "Travellers: —"
+    lines = []
+    for t in trav_list:
+        age = f" ({t['age']})" if t.get("age") else ""
+        lines.append(f"  • {t['name']}{age}")
+    return "Travellers:\n" + "\n".join(lines)
+
+
+
+def _sheet(session: dict) -> str:
+    r = session["requirements"]
+    trav = _travellers_block(r["travellers"])
+    return "\n".join([
+        "📝 *Your trip requirement sheet*",
+        f"Name: {r['customer_name'] or '—'}",
+        trav,
+        f"Departure city: {r['departure_city'] or '—'}",
+        f"Destination: {r['destination_city'] or '—'}",
+        f"Budget (₹): {r['budget_inr'] or '—'}",
+        f"Start date: {r['start_date'] or '—'}",
+        f"End date: {r['end_date'] or '—'}",
+        "",
+        "_You can answer in any order – I'll tick them off as we go!_",
+    ])
+
+
+async def _send_destinations_bundle(wa_id: str):
+    # three images + list as before (reuse your existing helper)
+    
+    # images …
+    await whatsapp_client.send_image(
+        wa_id,
+        "https://cdn.pixabay.com/photo/2017/08/30/11/12/singapore-2696704_1280.jpg",
+        "Singapore 🇸🇬 – gardens, theme parks, spotless streets\nhttps://www.youtube.com/watch?v=kij3n1iikKc&ab_channel=VisitSingapore\n",
+    )
+    await whatsapp_client.send_image(
+        wa_id,
+        "https://cdn.pixabay.com/photo/2016/08/08/16/09/indonesia-1578647_1280.jpg",
+        "Bali 🇮🇩 – temples, surf and sunsets\nhttps://www.youtube.com/watch?v=LCqK7wZd2Pk&ab_channel=TheLuxurySignature",
+    )
+    await whatsapp_client.send_image(
+        wa_id,
+        "https://cdn.pixabay.com/photo/2016/02/28/20/23/dubai-1227538_1280.jpg",
+        "Dubai 🇦🇪 – malls, desert safaris and sky-high views\nhttps://www.youtube.com/watch?v=fuSpjxrdhTw&ab_channel=VisitDubai",
+    )
+    await asyncio.sleep(1)
+    await whatsapp_client.send_list(
+        wa_id,
+        header="Pick a destination",
+        body="Tap to add to your plan:",
+        options=[
+            {"id": "dest_singapore", "title": "Singapore"},
+            {"id": "dest_bali", "title": "Bali"},
+            {"id": "dest_dubai", "title": "Dubai"},
+        ],
+        button="Show places",
+    )
+
+
+async def _planning_loop(wa_id: str, session: dict, msg_type: str, text: str, meta: dict):
+    
+    step = session.get("planning_step") or "ask"
+    plan = session["plan"]
+    dest = session["requirements"]["destination_city"]
+    logging.info(f"text: {text}")
+    logging.info(f"msg_type: {msg_type}")
+    logging.info(f"step: {step}")
+
+    # ---------- initial ask ---------------------------------------- #
+    if step == "ask":
+        await whatsapp_client.send_list(
+            wa_id,
+            header="What shall we plan first?",
+            body="Pick one of these to continue:",
+            options=[
+                {"id": "plan_activities", "title": "Activities"},
+                {"id": "plan_hotels",     "title": "Hotels"},
+                {"id": "plan_flights",    "title": "Flights"},
+            ],
+            button="Choose",
+        )
+        session["planning_step"] = "waiting_choice"
+        return
+
+    # ---------- wait for the user's choice ------------------------ #
+    if step == "waiting_choice":
+        chosen = meta.get("button_id") or meta.get("list_id")  
+        logging.info(f"chosen: {chosen}")          # user tapped a list-item
+        if not chosen:                          # or typed the word
+            lw = text.lower()
+            if "activity" in lw:
+                chosen = "plan_activities"
+            elif "hotel" in lw:
+                chosen = "plan_hotels"
+            elif "flight" in lw:
+                chosen = "plan_flights"
+
+        if not chosen:
+            await whatsapp_client.send_text(
+                wa_id,
+                "Just tap *Activities*, *Hotels* or *Flights* 🙂"
+            )
+            return
+
+        # ── update step & immediately re-enter the loop ───────────
+        session["planning_step"] = (
+        "activities" if chosen == "plan_activities"
+        else "hotels" if chosen == "plan_hotels"
+        else "flights"
+    )
+
+        # call the loop again with blank message to continue flow
+        await _planning_loop(wa_id, session, "", "", {})
+        return    
+    
+    if step == "activities":
+        acts = await backend_client.get_activities(dest)
+        logging.info(f"acts: {acts}")
+        await _show_activities(wa_id, acts)
+        session["planning_step"] = "activities_pick"
+        session["pending_activities"] = {str(a["id"]): a for a in acts}
+        return
+
+    if step == "activities_pick":
+        sel_id = (meta.get("list_id") or meta.get("button_id"))
+        aid    = sel_id.replace("act_", "") if sel_id else ""
+        pend   = session.get("pending_activities", {})
+
+        # 1. The user tapped a row
+        if msg_type == "interactive" and aid in pend:
+            plan["activity_ids"].append(int(aid))
+            plan.setdefault("activities", []).append(pend[aid])
+            plan["total_price_inr"] += pend[aid]["price_inr"]
+            await backend_client.create_or_update_plan(session)
+            await whatsapp_client.send_text(
+                wa_id, "✔️ Added!  Pick more or type *Done* when you’re finished."
+            )
+            return
+
+        # 2. The user typed “done”
+        if msg_type == "text" and text.casefold().strip() == "done":
+            logging.info("Reached done. we are here.")
+            session.pop("pending_activities", None)
+            session["planning_step"] = "hotels"
+            await _planning_loop(wa_id, session, "", "", {})   # jump forward
+            return
+
+        # 3. Anything else – gentle reminder
+        if msg_type == "text":
+            await whatsapp_client.send_text(
+                wa_id, "Just tap another activity or type *Done*."
+            )
+        return
+
+    # ---------- hotels list & pick ----------------------------- #
+    if step == "hotels":
+        hotels = await backend_client.get_hotels(dest)
+        await _show_hotels(wa_id, hotels)
+        session["planning_step"] = "hotels_pick"
+        session["pending_hotels"] = {str(h["id"]): h for h in hotels}
+        return
+
+    if step == "hotels_pick" and msg_type == "interactive":
+        logging.info(f"Reached hotels_pick")
+        hid  = (meta.get("list_id") or meta.get("button_id") or "").replace("hotel_", "")
+        pend = session.get("pending_hotels", {})
+        if hid in pend:
+            plan["hotel_ids"] = [int(hid)]
+            plan["hotel"]     = pend[hid]
+            plan["total_price_inr"] += pend[hid]["base_rate_inr"]
+            await backend_client.create_or_update_plan(session)
+            session.pop("pending_hotels", None)
+            session["planning_step"] = "flights"
+            step = "flights"                   # fall through
+
+    # ---------- flights list & pick ---------------------------- #
+    if step == "flights":
+        iata_map = {
+        "Bali": "DPS",
+        "Dubai": "DXB",
+        "Singapore": "SIN",
+    }
+        iata = iata_map.get(dest, dest[:3]).upper()
+        flights = await backend_client.get_flights(
+            dest_code=iata,    # crude mapping: SIN/DPS/DXB expected
+            depart_date=session["requirements"]["start_date"],
+        )
+        await _show_flights(wa_id, flights)
+        session["planning_step"] = "flights_pick"
+        session["pending_flights"] = {str(f["id"]): f for f in flights}
+        return
+
+    if step == "flights_pick" and msg_type == "interactive":
+        fid  = (meta.get("button_id") or "").replace("flight_", "")
+        pend = session.get("pending_flights", {})
+        if fid in pend:
+            plan["flight_ids"] = [int(fid)]
+            plan["flight"]     = pend[fid]
+            plan["total_price_inr"] += pend[fid]["price_inr"]
+            await backend_client.create_or_update_plan(session)
+            session.pop("pending_flights", None)
+            session["planning_step"] = "summary"
+            await whatsapp_client.send_text(wa_id, "✈️ Perfect – everything booked!")
+            step = "summary"                   # fall through
+
+    # ---------- summary ---------------------------------------- #
+    if step == "summary":
+        await whatsapp_client.send_text(wa_id, _plan_summary(session))
+        return
+
+
+
+async def _show_activities(wa_id: str, acts: List[dict]):
+    for a in acts:
+        await whatsapp_client.send_image(
+            wa_id,
+            image_url= "https://cdn.pixabay.com/photo/2018/01/03/19/17/cat-3059075_1280.jpg",
+            caption=f"{a['title']} – ₹{a['price_inr']:,}"
+        )
+    await asyncio.sleep(2)
+    await whatsapp_client.send_list(
+        wa_id,
+        header="Pick an activity",
+        body="Tap to add to your plan:",
+        options=[
+        {
+            "id": f"act_{a['id']}",
+            "title": a["title"][:24]                              # hard-limit
+        }
+        for a in acts                                        # Facebook list limit
+    ],
+        button="Activities",
+    )
+
+
+async def _show_hotels(wa_id: str, hotels: List[dict]):
+    for h in hotels:
+        await whatsapp_client.send_image(
+            wa_id,
+            image_url="https://cdn.pixabay.com/photo/2018/01/03/19/17/cat-3059075_1280.jpg",
+            caption=f"{h['name']} ({h['star']}★)",
+        )
+    await asyncio.sleep(1)
+    await whatsapp_client.send_list(
+        wa_id,
+        header="Hotels",
+        body="Pick one:",
+        options=[{"id": f"hotel_{h['id']}", "title": h["name"][:24]} for h in hotels],
+        button="Hotels",
+    )
+
+_MAX_WA_TITLE = 24
+
+def _trim(title: str) -> str:
+    """Return title ≤24 chars; add … if we truncated."""
+    return (title[: _MAX_WA_TITLE - 1] + "…") if len(title) > _MAX_WA_TITLE else title
+
+async def _show_flights(wa_id: str, flights: List[dict]):
+    
+    rows = [
+        {
+            "id":   f"flight_{f['id']}",
+            "title": _trim(f"{f['airline']} – ₹{f['price_inr']:,}")
+        }
+        for f in flights
+    ]
+    try:
+        await whatsapp_client.send_list(
+            wa_id,
+            header="Flights",
+            body="Pick a flight option:",
+            options=rows,
+            button="Flights",
+        )
+    except Exception as exc:                    
+        logger.exception("Failed to send flight list → %s", exc)
+
+
+def _plan_summary(session: dict) -> str:
+    p      = session["plan"]
+    hotel  = p.get("hotel")
+    flight = p.get("flight")
+    activities = p.get("activities", [])
+
+    hotel_line = (
+        f"{hotel['name']} ({hotel['star']}★) – ₹{hotel['base_rate_inr']:,}/night"
+        if hotel else "—"
+    )
+
+    flight_line = (
+        f"{flight['airline']} {flight['flight_number']} "
+        f"({flight['origin']}→{flight['destination']}) – ₹{flight['price_inr']:,}"
+        if flight else "—"
+    )
+
+    act_line = (
+        "—"
+        if not activities
+        else ", ".join(
+            f"{a['title']} – ₹{a['price_inr']:,}"
+            for a in activities
+        )
+    )
+    total     = f"₹{p['total_price_inr']:,}" if p["total_price_inr"] else "—"
+
+    return "\n".join([
+        "🧾 *Your draft trip plan*",
+        f"Activities : {act_line}",
+        f"Hotel      : {hotel_line}",
+        f"Flight     : {flight_line}",
+        f"*Estimated total*: {total}",
+    ])
+
+def _log_history(session: dict, user_msg: str, bot_msg: str):
+    session["history"].extend([f"User: {user_msg}", f"Bot: {bot_msg}"])
+
+
+conv_flow = ConversationFlow()
+

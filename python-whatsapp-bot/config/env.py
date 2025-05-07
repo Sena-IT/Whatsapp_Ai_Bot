@@ -12,8 +12,8 @@ RECIPIENT_WAID = os.getenv("RECIPIENT_WAID")
 VERSION = os.getenv("VERSION", "v22.0")  # Default to v22.0 if not set
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
-
-
+BACKEND_URL = os.getenv("BACKEND_URL")
+FACEBOOK_API_BASE = os.getenv("FACEBOOK_API_BASE")
 # Validate required environment variables
 def validate_env():
     required_vars = ["OPENAI_API_KEY", "ACCESS_TOKEN", "APP_ID", "APP_SECRET", "RECIPIENT_WAID", "VERSION", "PHONE_NUMBER_ID", "VERIFY_TOKEN"]

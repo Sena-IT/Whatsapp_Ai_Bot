@@ -1,40 +1,41 @@
-import json
 import logging
 from fastapi import HTTPException
-from utils.whatsapp_utils import process_whatsapp_message, is_valid_whatsapp_message
-from config.env import VERIFY_TOKEN
+
+from utils.whatsapp_utils import parse_incoming
+from services.conversation_flow import conv_flow# the singleton ConversationFlow
 
 logger = logging.getLogger(__name__)
 
+
 class WhatsAppService:
     @staticmethod
-    async def verify_webhook(hub_mode: str, hub_verify_token: str, hub_challenge: str) -> str:
-        """Verify the WhatsApp webhook"""
-        if not hub_mode or not hub_verify_token or not hub_challenge:
-            logging.error("🚨 Missing parameters in webhook verification request")
-            raise HTTPException(status_code=400, detail="Missing parameters")
+    async def verify_webhook(mode: str, token: str, challenge: str, verify_token_env: str) -> str:
+        """Basic GET verification."""
+        if mode == "subscribe" and token == verify_token_env and challenge:
+            logger.info("✅  WEBHOOK_VERIFIED")
+            return challenge
+        raise HTTPException(status_code=403, detail="Verification failed")
 
-        if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
-            logging.info("✅ WEBHOOK_VERIFIED")
-            return hub_challenge
-        else:
-            logging.error("❌ VERIFICATION_FAILED: Invalid token")
-            raise HTTPException(status_code=403, detail="Verification failed")
+    # ---- POST handler -----------------------------------------------------
 
     @staticmethod
     async def handle_webhook(body: dict) -> dict:
-        """Handle incoming webhook events from the WhatsApp API."""
-        if body.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {}).get("statuses"):
-            logging.info("Received a WhatsApp status update.")
+        """
+        Receives *any* WhatsApp callback.  
+        * Status / delivery events → 200 OK, no further action.  
+        * Chat messages          → funnelled into conv_flow.handle_message().
+        """
+        is_chat, wa_id, profile_name, message = parse_incoming(body)
+
+        # Non-chat event (status/delivery) → just ack
+        if not is_chat:
             return {"status": "ok"}
 
         try:
-            is_valid, wa_id, profile_name, message = is_valid_whatsapp_message(body)
-            if is_valid:
-                await process_whatsapp_message(body)  # Await the async call
-                return {"status": "ok"}
-            else:
-                raise HTTPException(status_code=404, detail="Not a WhatsApp API event")
-        except Exception as e:
-            logging.error(f"Error processing message: {str(e)}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            # Pass the full payload down; conv_flow will do deeper parsing
+            await conv_flow.handle_event(body)
+            return {"status": "ok"}
+
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"Error in WhatsAppService.handle_webhook: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
