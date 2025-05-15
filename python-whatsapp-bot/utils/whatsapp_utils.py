@@ -8,10 +8,13 @@ WhatsApp payload helpers
 """
 
 from __future__ import annotations
-
+import httpx
 import logging
 from typing import Tuple, Dict, Any, Optional
-from config.env import PHONE_NUMBER_ID
+
+import requests
+from config.env import FACEBOOK_API_BASE, PHONE_NUMBER_ID, ACCESS_TOKEN
+
 
 logger = logging.getLogger(__name__)
 
@@ -140,3 +143,52 @@ async def transcribe_audio_from_whatsapp(audio_id: str) -> str:
     except Exception as exc:  # noqa: BLE001
         logger.error(f"STT error for audio_id={audio_id}: {exc}")
         return ""
+
+async def upload_audio_to_meta_cloud(audio_path):
+    """Upload audio file to Meta's cloud storage"""
+    print("-------------- Uploading audio to Meta cloud ----------------")
+
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}"
+    }
+    
+    url = f"{FACEBOOK_API_BASE}/{PHONE_NUMBER_ID}/media"
+
+    with open(audio_path, 'rb') as file:
+        files = {
+            'file': ('audio.mp3', file, 'audio/mpeg')
+        }
+        
+        payload = {
+            'messaging_product': 'whatsapp',
+            'type': 'audio'
+        }    
+
+        response = requests.post(url, files=files, data=payload, headers=headers)
+        # uploaded_time = datetime.now()
+
+        if response.status_code == 200:
+            media_id = response.json()['id']
+            logging.info("Audio uploaded successfully. Media ID: %s", media_id)
+            return media_id
+        else:
+            logging.error("Failed to upload audio: %s", response.text)
+            return None
+
+
+async def delete_uploaded_file(media_id):
+
+        print("------------------- delete_uploaded_file ------------------------")
+
+        url = f"{FACEBOOK_API_BASE}/{PHONE_NUMBER_ID}/{media_id}"
+        headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}"
+        }
+        response = requests.delete(url, headers=headers)
+        
+
+        if response.status_code == 200 :
+            print(f"--------------------- File{media_id} deleted from Meta Server.------------------------")
+        else:
+            print(f"-----------------------Failed to delete{media_id} file.----------------------------")           
+        

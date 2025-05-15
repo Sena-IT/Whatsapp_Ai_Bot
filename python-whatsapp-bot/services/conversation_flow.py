@@ -5,17 +5,21 @@ Now supports GREETING → REQUIREMENT → PLANNING with live backend data.
 
 import asyncio
 import logging
+import os
 from typing import Dict, Any, List
 import datetime
 import locale
-locale.setlocale(locale.LC_ALL, 'en_IN.utf8')
+try:
+    locale.setlocale(locale.LC_ALL, 'en_IN.utf8')
+except locale.Error:
+    locale.setlocale(locale.LC_ALL, "C.UTF-8")
 
 from services.session_service import session_svc
 from services.whatsapp_client import whatsapp_client
-from services.llm_orchestrator import llm
+from services.llm_orchestrator import llm, tts
 from services import backend_client
 
-from utils.whatsapp_utils import extract_message_details, transcribe_audio_from_whatsapp
+from utils.whatsapp_utils import extract_message_details, transcribe_audio_from_whatsapp, upload_audio_to_meta_cloud, delete_uploaded_file
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +144,26 @@ class ConversationFlow:
         
 
         # ---- default reply ----------------------------------------- #
-        await whatsapp_client.send_text(wa_id, resp["reply"])
+        if msg_type == "audio":
+            audio_path = await tts.generate_audio(resp["reply"])
+            if not audio_path:
+                return False
+            
+            media_id = await upload_audio_to_meta_cloud(audio_path)
+            if not media_id:
+                return False
+            
+            response_code = await whatsapp_client.send_audio(wa_id, media_id)
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+            
+            if response_code == 200:
+                await delete_uploaded_file(media_id)
+                return True
+            return False
+        else:
+            await whatsapp_client.send_text(wa_id, resp["reply"])
+        
         s["history"].extend([f"User: {msg_text}", f"Bot: {resp['reply']}"])
 
 
@@ -281,11 +304,11 @@ async def _planning_loop(wa_id: str, session: dict, msg_type: str, text: str, me
             plan["total_price_inr"] += pend[aid]["price_inr"]
             await backend_client.create_or_update_plan(session)
             await whatsapp_client.send_text(
-                wa_id, "✔️ Added!  Pick more or type *Done* when you’re finished."
+                wa_id, "✔️ Added!  Pick more or type *Done* when you're finished."
             )
             return
 
-        # 2. The user typed “done”
+        # 2. The user typed "done"
         if msg_type == "text" and text.casefold().strip() == "done":
             logging.info("Reached done. we are here.")
             session.pop("pending_activities", None)
@@ -348,21 +371,26 @@ async def _planning_loop(wa_id: str, session: dict, msg_type: str, text: str, me
             await backend_client.create_or_update_plan(session)
             session.pop("pending_flights", None)
             session["planning_step"] = "summary"
-            await whatsapp_client.send_text(wa_id, "✈️ Perfect – everything booked!")
+            await whatsapp_client.send_text(wa_id, "✈️ Perfect – Your trip is ready to go!")
             step = "summary"                   # fall through
 
     # ---------- summary ---------------------------------------- #
     if step == "summary":
-        await whatsapp_client.send_text(wa_id, _plan_summary(session))
+        await whatsapp_client.send_text(wa_id, _plan_summary(wa_id,session))
         return
 
 
 
 async def _show_activities(wa_id: str, acts: List[dict]):
     for a in acts:
+
+        image_url = "https://cdn.pixabay.com/photo/2018/01/03/19/17/cat-3059075_1280.jpg" # Default if no images
+        if a.get("images"):
+            image_url = a["images"].strip()
+
         await whatsapp_client.send_image(
             wa_id,
-            image_url= "https://cdn.pixabay.com/photo/2018/01/03/19/17/cat-3059075_1280.jpg",
+            image_url= image_url,
             caption=f"{a['title']} – ₹{a['price_inr']:,}"
         )
     await asyncio.sleep(2)
@@ -383,9 +411,15 @@ async def _show_activities(wa_id: str, acts: List[dict]):
 
 async def _show_hotels(wa_id: str, hotels: List[dict]):
     for h in hotels:
+        # Get the image URL directly, stripping whitespace
+        image_url = "https://cdn.pixabay.com/photo/2018/01/03/19/17/cat-3059075_1280.jpg" # Default if no images
+        if h.get("images"):
+            image_url = h["images"].strip()
+
+
         await whatsapp_client.send_image(
             wa_id,
-            image_url="https://cdn.pixabay.com/photo/2018/01/03/19/17/cat-3059075_1280.jpg",
+            image_url=image_url,
             caption=f"{h['name']} ({h['star']}★)",
         )
     await asyncio.sleep(1)
@@ -424,7 +458,7 @@ async def _show_flights(wa_id: str, flights: List[dict]):
         logger.exception("Failed to send flight list → %s", exc)
 
 
-def _plan_summary(session: dict) -> str:
+async def _plan_summary(wa_id: str,session: dict) -> str:
     p      = session["plan"]
     hotel  = p.get("hotel")
     flight = p.get("flight")
@@ -450,6 +484,18 @@ def _plan_summary(session: dict) -> str:
         )
     )
     total     = f"₹{p['total_price_inr']:,}" if p["total_price_inr"] else "—"
+
+    try:
+        await whatsapp_client.send_text(wa_id, "Creating your itinerary...")
+        
+        # await backend_client.generate_itinerary()
+        # Send the itinerary link
+        # await whatsapp_client.send_text(wa_id, "View your detailed itinerary here: https://f5b3-115-96-84-178.ngrok-free.app/")
+    except Exception as e:
+        logger.error(f"Failed to generate itinerary: {e}")
+        await whatsapp_client.send_text(wa_id, "Sorry, I couldn't generate your itinerary at the moment. Please try again later.")
+
+
 
     return "\n".join([
         "🧾 *Your draft trip plan*",

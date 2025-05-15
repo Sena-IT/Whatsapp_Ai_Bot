@@ -1,6 +1,9 @@
 import httpx
 import os
+import logging
 from config.env import BACKEND_URL
+
+logger = logging.getLogger(__name__)
 
 BACKEND_URL = BACKEND_URL.rstrip("/")
 
@@ -29,7 +32,6 @@ async def get_flights(dest_code: str, depart_date: str, limit: int = 2) -> list[
         return r.json()[:limit]
 
 
-
 async def create_or_update_plan(session: dict) -> None:
     """
     Push the current plan dict to /plan_list.
@@ -48,3 +50,13 @@ async def create_or_update_plan(session: dict) -> None:
         r.raise_for_status()
         data = r.json()
         session["plan_id"] = data["id"]  # store ID after first creation
+
+async def generate_itinerary() -> dict:
+    """Generate itinerary for a plan using the RFI endpoint."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"{BACKEND_URL}/rfi",
+            json={"plan_id": 1}
+        )
+        resp.raise_for_status()
+        return resp.json()
