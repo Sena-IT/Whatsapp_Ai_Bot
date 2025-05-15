@@ -73,5 +73,15 @@ class SessionService:
             data = r.json()
             s["backend_id"] = data["id"]
 
+    async def update_session_field(self, wa_id: str, field_name: str, value: any):
+        """Update an arbitrary field in the session storage for a given wa_id."""
+        if wa_id in self.sessions:
+            self.sessions[wa_id][field_name] = value
+            logger.info(f"Session field '{field_name}' updated to '{value}' for {wa_id}.")
+            # If this field needs to be synced with the backend, add logic here
+            # For example, some fields updated here might need to trigger _sync_req or a similar call
+            # For now, it's an in-memory update primarily.
+        else:
+            logger.warning(f"Attempted to update field '{field_name}' for non-existent session: {wa_id}")
 
 session_svc = SessionService(api_base=BACKEND_URL)

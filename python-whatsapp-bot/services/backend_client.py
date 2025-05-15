@@ -8,20 +8,20 @@ logger = logging.getLogger(__name__)
 BACKEND_URL = BACKEND_URL.rstrip("/")
 
 
-async def get_activities(city: str, limit: int = 6) -> list[dict]:
+async def get_activities(city: str) -> list[dict]:
     params = {"city": city.title()}
     async with httpx.AsyncClient() as c:
         r = await c.get(f"{BACKEND_URL}/activities", params=params, timeout=8)
         r.raise_for_status()
-        return r.json()[:limit]
+        return r.json()
 
 
-async def get_hotels(city: str, limit: int = 3) -> list[dict]:
+async def get_hotels(city: str) -> list[dict]:
     params = {"city": city.title()}
     async with httpx.AsyncClient() as c:
         r = await c.get(f"{BACKEND_URL}/hotels", params=params, timeout=8)
         r.raise_for_status()
-        return r.json()[:limit]
+        return r.json()
 
 
 async def get_flights(dest_code: str, depart_date: str, limit: int = 2) -> list[dict]:

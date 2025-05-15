@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class WhatsAppClient:
     """Encapsulates WhatsApp API interactions."""
     def __init__(self, api_base: str, phone_id: str, token: str):
-        self.api_base = api_base
+        self.api_base = api_base.rstrip('/')
         self.phone_id = phone_id
         self.headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
