@@ -90,3 +90,6 @@ target/
 
 # Exlcude the database file
 .db
+
+# Cursor
+.cursor/
