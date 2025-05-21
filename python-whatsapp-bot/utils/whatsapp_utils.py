@@ -176,6 +176,52 @@ async def upload_audio_to_meta_cloud(audio_path):
             return None
 
 
+async def upload_file_to_meta_cloud(file_path: str, content_type: str) -> Optional[str]:
+    """Upload a file to Meta's cloud storage and return its media ID."""
+    logger.info(f"Uploading {content_type} file to Meta cloud from path: {file_path}")
+
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}"
+    }
+    
+    url = f"{FACEBOOK_API_BASE}/{PHONE_NUMBER_ID}/media"
+    
+    import os # Import os for path.basename
+    file_name = os.path.basename(file_path)
+
+    with open(file_path, 'rb') as file:
+        files = {
+            'file': (file_name, file, content_type)  # Use provided content_type and extract filename
+        }
+        
+        payload = {
+            'messaging_product': 'whatsapp',
+            'type': content_type # Make type dynamic based on content_type for broader use, or set to 'document' if only for docs
+        }    
+
+        try:
+            async with httpx.AsyncClient() as client: # Use httpx for async request
+                response = await client.post(url, files=files, data=payload, headers=headers)
+            
+            if response.status_code == 200:
+                media_id = response.json().get('id')
+                if media_id:
+                    logger.info(f"File uploaded successfully. Media ID: {media_id}")
+                    return media_id
+                else:
+                    logger.error(f"Media ID not found in response: {response.text}")
+                    return None
+            else:
+                logger.error(f"Failed to upload file: {response.status_code} - {response.text}")
+                return None
+        except httpx.RequestError as e:
+            logger.error(f"HTTP request failed: {e}")
+            return None
+        except Exception as e: # Catch any other exceptions
+            logger.error(f"An unexpected error occurred during file upload: {e}")
+            return None
+
+
 async def delete_uploaded_file(media_id):
 
         print("------------------- delete_uploaded_file ------------------------")

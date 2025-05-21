@@ -51,12 +51,14 @@ async def create_or_update_plan(session: dict) -> None:
         data = r.json()
         session["plan_id"] = data["id"]  # store ID after first creation
 
-async def generate_itinerary() -> dict:
+async def generate_itinerary(plan_id: int) -> dict:
     """Generate itinerary for a plan using the RFI endpoint."""
+    logger.info(f"Requesting RFI for plan_id: {plan_id}")
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{BACKEND_URL}/rfi",
-            json={"plan_id": 1}
+            json={"plan_id": plan_id}
         )
         resp.raise_for_status()
+        logger.info(f"RFI call successful for plan_id: {plan_id}. Response status: {resp.status_code}")
         return resp.json()

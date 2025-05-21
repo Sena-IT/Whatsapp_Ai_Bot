@@ -62,6 +62,13 @@ class SessionService:
         s["state"] = state
         s["last_activity"] = datetime.utcnow().isoformat()
 
+    async def delete_session(self, wa_id: str):
+        if wa_id in self.sessions:
+            del self.sessions[wa_id]
+            logger.info(f"Session deleted for wa_id: {wa_id}")
+        else:
+            logger.info(f"No session found for wa_id: {wa_id} to delete")
+
     async def _sync_req(self, wa_id: str, patch: dict):
         s = self.sessions[wa_id]
         payload = {"id": "new" if s["backend_id"] is None else s["backend_id"]}

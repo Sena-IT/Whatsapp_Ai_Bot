@@ -93,6 +93,24 @@ class WhatsAppClient:
         async with httpx.AsyncClient() as client:
             await client.post(url, json=payload, headers=self.headers, timeout=10)        
 
+    async def send_document(self, wa_id: str, media_id: str, filename: str, caption: str = None):
+        url = f"{self.api_base}/{self.phone_id}/messages"
+        document_payload = {"id": media_id, "filename": filename}
+        if caption:
+            document_payload["caption"] = caption
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": wa_id,
+            "type": "document",
+            "document": document_payload
+        }
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload, headers=self.headers, timeout=10)
+            response.raise_for_status() # Raise an exception for bad status codes
+            return response
+
     async def send_audio(self, wa_id: str, media_id: str):
         
         try:

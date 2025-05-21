@@ -18,8 +18,9 @@ from services.session_service import session_svc
 from services.whatsapp_client import whatsapp_client
 from services.llm_orchestrator import llm, tts
 from services import backend_client
+from config.env import ITINERARY_BUILDER_BASE_URL
 
-from utils.whatsapp_utils import extract_message_details, transcribe_audio_from_whatsapp, upload_audio_to_meta_cloud, delete_uploaded_file
+from utils.whatsapp_utils import extract_message_details, transcribe_audio_from_whatsapp, upload_audio_to_meta_cloud, delete_uploaded_file, upload_file_to_meta_cloud
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +54,18 @@ class ConversationFlow:
     # =================== MAIN STATE MACHINE ========================= #
     async def _process(self, wa_id: str, profile_name: str, payload: Dict[str, Any]):
         s = session_svc.get(wa_id)
+        user_message_text = payload.get("text", "").strip().lower() # Get text from payload
 
-        # ---- new visitor ------------------------------------------- #
+        # ---- Keyword-based session reset ---------------------------- #
+        # Check if an existing session should be reset by keyword
+        if s and user_message_text in ["reset demo"]:
+            logger.info(f"Reset keyword '{user_message_text}' detected from {wa_id}. Deleting session.")
+            await session_svc.delete_session(wa_id)
+            s = None # Crucial: Set s to None to trigger the new visitor logic below
+
+        # ---- new visitor or session just reset via keyword ---------- #
         if not s:
+            logger.info(f"Initializing session for {wa_id} (new visitor or after reset).")
             await session_svc.init_session(wa_id, profile_name)
             await whatsapp_client.send_reply_buttons(
                 wa_id,
@@ -76,6 +86,34 @@ class ConversationFlow:
 
         if s["state"] == "PLANNING":
             await _planning_loop(wa_id, s, msg_type, msg_text, meta)
+            return
+    
+        # ---- POST REQUIREMENT CHOICE State Handler ------------------ #
+        if s["state"] == "POST_REQUIREMENT_CHOICE":
+            if msg_type == "interactive":
+                button_id = meta.get("button_id")
+                if button_id == "continue_on_whatsapp":
+                    await session_svc.set_state(wa_id, "PLANNING")
+                    await whatsapp_client.send_text(
+                        wa_id,
+                        "✅ All set! Let's plan flights, hotels and fun activities next. "
+                        "What would you like to start with?",
+                    )
+                    await _planning_loop(wa_id, s, "", "", {})  # Start planning
+                elif button_id == "open_itinerary_builder":
+                    if s.get("plan_id"):
+                        builder_url = f"{ITINERARY_BUILDER_BASE_URL}?itineraryId={s['plan_id']}" 
+                        await whatsapp_client.send_text(wa_id, f"Great! You can build your own itinerary here: {builder_url}")
+                    else:
+                        logger.error(f"plan_id not found in session for wa_id {wa_id} when trying to generate builder URL.")
+                        await whatsapp_client.send_text(wa_id, "Sorry, I couldn't create the link for the itinerary builder at the moment. Please try again.")
+                    # Consider what state to transition to. GREETING resets the flow for a new plan.
+                    await session_svc.set_state(wa_id, "GREETING") 
+                    await whatsapp_client.send_text(wa_id, "Let me know if there's anything else I can help you with!")
+                else: 
+                    await whatsapp_client.send_text(wa_id, "Please choose one of the options by tapping a button.")
+            else: # Not an interactive reply
+                await whatsapp_client.send_text(wa_id, "Please tap one of the buttons to proceed.")
             return
     
         # ---- GREETING → REQUIREMENT trigger ------------------------ #
@@ -105,7 +143,7 @@ class ConversationFlow:
         if msg_type == "audio":
             tr = await transcribe_audio_from_whatsapp(meta["audio_id"])
             if tr:
-                await whatsapp_client.send_text(wa_id, f"I heard: “{tr}”")
+                await whatsapp_client.send_text(wa_id, f'I heard: "{tr}"')
                 msg_text = tr
             else:
                 await whatsapp_client.send_text(wa_id, "Sorry, didn't catch that. Please type 🙂")
@@ -120,16 +158,80 @@ class ConversationFlow:
             if _should_show_sheet(s, resp["update"]):
                 await whatsapp_client.send_text(wa_id, _sheet(s))
 
-        # ---- auto flip to PLANNING --------------------------------- #
+        # ---- auto flip to POST_REQUIREMENT_CHOICE (modified from PLANNING) ---- #
         if s["state"] == "REQUIREMENT" and _complete(s["requirements"]):
-            await session_svc.set_state(wa_id, "PLANNING")
-            await whatsapp_client.send_text(
+            destination_city = s["requirements"].get("destination_city", "").title()
+            
+            pdf_path = None
+            pdf_caption = None
+            pdf_filename = None
+
+            if "Singapore" in destination_city:
+                pdf_path = "assets/Singaporeitinerary.pdf"
+                pdf_caption = "Here is a sample itinerary for Singapore."
+                pdf_filename = "Singaporeitinerary.pdf"
+            elif "Bali" in destination_city:
+                pdf_path = "assets/Baliitinerary.pdf"
+                pdf_caption = "Here is a sample itinerary for Bali."
+                pdf_filename = "Baliitinerary.pdf"
+            elif "Dubai" in destination_city:
+                pdf_path = "assets/Dubaiitinerary.pdf"
+                pdf_caption = "Here is a sample itinerary for Dubai."
+                pdf_filename = "Dubaiitinerary.pdf"
+            
+            if pdf_path: # Proceed only if a PDF path was determined
+                try:
+                    media_id = await upload_file_to_meta_cloud(pdf_path, "application/pdf")
+                    if media_id:
+                        await whatsapp_client.send_document(wa_id, media_id, filename=pdf_filename, caption=pdf_caption)
+                        await delete_uploaded_file(media_id) 
+                    else:
+                        logger.error(f"Failed to get media_id for PDF: {pdf_path}")
+                        await whatsapp_client.send_text(wa_id, "Sorry, I couldn't send the sample itinerary PDF at the moment.")
+                except FileNotFoundError:
+                    logger.error(f"Itinerary PDF not found at {pdf_path}")
+                    await whatsapp_client.send_text(wa_id, "Sorry, the sample itinerary PDF is currently unavailable for your chosen destination.")
+                except Exception as e:
+                    logger.error(f"Error sending PDF {pdf_path}: {e}")
+                    await whatsapp_client.send_text(wa_id, "Sorry, an error occurred while sending the sample itinerary.")
+            else:
+                logger.info(f"No specific sample itinerary PDF found for destination: {destination_city}. Skipping PDF send.")
+                # Optionally send a message to the user, e.g.:
+                # await whatsapp_client.send_text(wa_id, "A general sample itinerary will be prepared for you shortly.")
+
+            # Ensure a plan is created/updated in the backend before showing options
+            try:
+                await backend_client.create_or_update_plan(s)
+                logger.info(f"Plan {s.get('plan_id', 'new')} for requirement {s['backend_id']} synced with backend.")
+                
+                # Now that plan_id is confirmed, call RFI
+                if s.get("plan_id"):
+                    logger.info(f"Calling RFI for plan_id: {s['plan_id']}")
+                    rfi_response = await backend_client.generate_itinerary(s["plan_id"])
+                    logger.info(f"RFI call for plan_id {s['plan_id']} successful. Response: {rfi_response}")
+                    # Store or use rfi_response as needed, e.g., s["rfi_data"] = rfi_response
+                else:
+                    logger.error(f"Cannot call RFI: plan_id is missing after create_or_update_plan for requirement {s['backend_id']}.")
+
+            except Exception as e:
+                logger.error(f"Error syncing plan with backend or calling RFI before POST_REQUIREMENT_CHOICE: {e}")
+                # Decide if we should still proceed or inform user of an error
+                # For now, let's proceed but this could be a point of failure
+
+            # Send buttons
+            button_header = "Customize itinerary or use builder"
+            button_body = "You can customize your itinerary on WhatsApp or check out our detailed Itinerary Builder"
+            await whatsapp_client.send_reply_buttons(
                 wa_id,
-                "✅ All set! Let's plan flights, hotels and fun activities next. "
-                "What would you like to start with?",
+                header=button_header, 
+                body=button_body,
+                buttons=[
+                    {"id": "continue_on_whatsapp", "title": "Stay on WhatsApp"},
+                    {"id": "open_itinerary_builder", "title": "Open Builder"}
+                ],
             )
-            await _planning_loop(wa_id, s, "", "", {})
-            return  
+            await session_svc.set_state(wa_id, "POST_REQUIREMENT_CHOICE")
+            return  # End turn here, wait for button press
 
         # ---- still in REQUIREMENT: maybe send suggestions ---------- #
         if (
@@ -376,7 +478,37 @@ async def _planning_loop(wa_id: str, session: dict, msg_type: str, text: str, me
 
     # ---------- summary ---------------------------------------- #
     if step == "summary":
-        await whatsapp_client.send_text(wa_id, _plan_summary(wa_id,session))
+        logging.info(f"Reached summary. Updating plan and regenerating RFI for plan_id: {session.get('plan_id')}")
+        try:
+            # Update the plan in the backend with final selections
+            if session.get("plan_id"):
+                await backend_client.create_or_update_plan(session)
+                logger.info(f"Plan {session['plan_id']} updated successfully in backend.")
+                
+                # Regenerate RFI with the updated plan
+                rfi_response = await backend_client.generate_itinerary(session["plan_id"])
+                logger.info(f"RFI regenerated for plan_id {session['plan_id']}. Response: {rfi_response}")
+                # Optionally store rfi_response in session if needed for summary
+            else:
+                logger.error(f"Cannot update plan or regenerate RFI: plan_id missing in session summary step for wa_id: {wa_id}")
+        except Exception as e:
+            logger.error(f"Error during final plan update or RFI regeneration for plan_id {session.get('plan_id')}: {e}")
+            # Potentially inform user of an issue, for now, we proceed to show summary with possibly stale data
+
+        logging.info(f"Reached summary")
+        summary_text = await _plan_summary(wa_id, session)
+        await whatsapp_client.send_text(wa_id, summary_text)
+
+        # Send the links after the summary text
+        # await whatsapp_client.send_text(wa_id, "View your detailed itinerary here: https://drive.google.com/file/d/1I4DFI6DcYS-T3pEfMwr4dlBvxCLFvDz3/view?usp=sharing")
+        
+        if session.get("plan_id"):
+            builder_url = f"{ITINERARY_BUILDER_BASE_URL}?itineraryId={session['plan_id']}"
+            await whatsapp_client.send_text(wa_id, f"You can also build and further customize your itinerary here: {builder_url}")
+        else:
+            logger.warning(f"plan_id not found in session for wa_id {wa_id} when trying to send builder link in summary.")
+            # Optionally send a generic builder link or a message indicating the custom link isn't available
+
         return
 
 
@@ -484,18 +616,6 @@ async def _plan_summary(wa_id: str,session: dict) -> str:
         )
     )
     total     = f"₹{p['total_price_inr']:,}" if p["total_price_inr"] else "—"
-
-    try:
-        await whatsapp_client.send_text(wa_id, "Creating your itinerary...")
-        
-        # await backend_client.generate_itinerary()
-        # Send the itinerary link
-        # await whatsapp_client.send_text(wa_id, "View your detailed itinerary here: https://f5b3-115-96-84-178.ngrok-free.app/")
-    except Exception as e:
-        logger.error(f"Failed to generate itinerary: {e}")
-        await whatsapp_client.send_text(wa_id, "Sorry, I couldn't generate your itinerary at the moment. Please try again later.")
-
-
 
     return "\n".join([
         "🧾 *Your draft trip plan*",

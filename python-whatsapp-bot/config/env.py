@@ -15,9 +15,11 @@ VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 BACKEND_URL = os.getenv("BACKEND_URL")
 FACEBOOK_API_BASE = os.getenv("FACEBOOK_API_BASE")
 CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY")
+ITINERARY_BUILDER_BASE_URL = os.getenv("ITINERARY_BUILDER_BASE_URL") # Default if not set
+
 # Validate required environment variables
 def validate_env():
-    required_vars = ["OPENAI_API_KEY", "ACCESS_TOKEN", "APP_ID", "APP_SECRET", "RECIPIENT_WAID", "VERSION", "PHONE_NUMBER_ID", "VERIFY_TOKEN", "CARTESIA_API_KEY"]
+    required_vars = ["OPENAI_API_KEY", "ACCESS_TOKEN", "APP_ID", "APP_SECRET", "RECIPIENT_WAID", "VERSION", "PHONE_NUMBER_ID", "VERIFY_TOKEN", "CARTESIA_API_KEY", "BACKEND_URL", "ITINERARY_BUILDER_BASE_URL"]
     missing_vars = [var for var in required_vars if not os.getenv(var)]
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
