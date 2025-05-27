@@ -24,7 +24,7 @@ class SessionService:
             "history": [],
             "requirements": {
                 "customer_name": profile_name,
-                "travellers": [],
+                "pax": [],
                 "departure_city": None,
                 "destination_city": None,
                 "budget_inr": None,

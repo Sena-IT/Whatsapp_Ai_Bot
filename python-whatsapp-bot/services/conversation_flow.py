@@ -25,7 +25,7 @@ from utils.whatsapp_utils import extract_message_details, transcribe_audio_from_
 logger = logging.getLogger(__name__)
 
 
-REQ_KEYS = ["destination_city", "travellers", "departure_city",
+REQ_KEYS = ["destination_city", "pax", "departure_city",
             "budget_inr", "start_date", "end_date"]
 
 
@@ -269,24 +269,13 @@ class ConversationFlow:
         s["history"].extend([f"User: {msg_text}", f"Bot: {resp['reply']}"])
 
 
-def _travellers_block(trav_list):
-    if not trav_list:
-        return "Travellers: —"
-    lines = []
-    for t in trav_list:
-        age = f" ({t['age']})" if t.get("age") else ""
-        lines.append(f"  • {t['name']}{age}")
-    return "Travellers:\n" + "\n".join(lines)
-
-
-
 def _sheet(session: dict) -> str:
     r = session["requirements"]
-    trav = _travellers_block(r["travellers"])
+    
     return "\n".join([
         "📝 *Your trip requirement sheet*",
         f"Name: {r['customer_name'] or '—'}",
-        trav,
+        f"Pax: {r['pax'] or '—'}",
         f"Departure city: {r['departure_city'] or '—'}",
         f"Destination: {r['destination_city'] or '—'}",
         f"Budget (₹): {r['budget_inr'] or '—'}",
