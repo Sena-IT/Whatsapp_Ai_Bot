@@ -57,7 +57,8 @@ async def generate_itinerary(plan_id: int) -> dict:
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{BACKEND_URL}/rfi",
-            json={"plan_id": plan_id}
+            json={"plan_id": plan_id},
+            timeout=180.0
         )
         resp.raise_for_status()
         logger.info(f"RFI call successful for plan_id: {plan_id}. Response status: {resp.status_code}")

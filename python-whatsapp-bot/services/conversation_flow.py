@@ -467,7 +467,12 @@ async def _planning_loop(wa_id: str, session: dict, msg_type: str, text: str, me
 
     # ---------- summary ---------------------------------------- #
     if step == "summary":
-        logging.info(f"Reached summary. Updating plan and regenerating RFI for plan_id: {session.get('plan_id')}")
+        logging.info(f"Reached summary. Updating plan for plan_id: {session.get('plan_id')}")
+        
+        # Send the plan summary text first
+        summary_text = await _plan_summary(wa_id, session)
+        await whatsapp_client.send_text(wa_id, summary_text)
+
         try:
             # Update the plan in the backend with final selections
             if session.get("plan_id"):
@@ -477,27 +482,19 @@ async def _planning_loop(wa_id: str, session: dict, msg_type: str, text: str, me
                 # Regenerate RFI with the updated plan
                 rfi_response = await backend_client.generate_itinerary(session["plan_id"])
                 logger.info(f"RFI regenerated for plan_id {session['plan_id']}. Response: {rfi_response}")
-                # Optionally store rfi_response in session if needed for summary
+                
+                # Send the builder URL only after successful RFI regeneration
+                builder_url = f"{ITINERARY_BUILDER_BASE_URL}?itineraryId={session['plan_id']}"
+                await whatsapp_client.send_text(wa_id, f"You can also build and further customize your itinerary here: {builder_url}")
             else:
-                logger.error(f"Cannot update plan or regenerate RFI: plan_id missing in session summary step for wa_id: {wa_id}")
+                logger.error(f"Cannot update plan or regenerate RFI (and thus cannot send builder link): plan_id missing in session summary step for wa_id: {wa_id}")
+                # Do not send builder link if plan_id is missing. Summary already sent.
         except Exception as e:
             logger.error(f"Error during final plan update or RFI regeneration for plan_id {session.get('plan_id')}: {e}")
-            # Potentially inform user of an issue, for now, we proceed to show summary with possibly stale data
+            # Inform user about RFI failure, but summary was already sent.
+            await whatsapp_client.send_text(wa_id, "Sorry, there was an issue preparing the detailed itinerary link. Your summary is above.")
 
-        logging.info(f"Reached summary")
-        summary_text = await _plan_summary(wa_id, session)
-        await whatsapp_client.send_text(wa_id, summary_text)
-
-        # Send the links after the summary text
-        # await whatsapp_client.send_text(wa_id, "View your detailed itinerary here: https://drive.google.com/file/d/1I4DFI6DcYS-T3pEfMwr4dlBvxCLFvDz3/view?usp=sharing")
-        
-        if session.get("plan_id"):
-            builder_url = f"{ITINERARY_BUILDER_BASE_URL}?itineraryId={session['plan_id']}"
-            await whatsapp_client.send_text(wa_id, f"You can also build and further customize your itinerary here: {builder_url}")
-        else:
-            logger.warning(f"plan_id not found in session for wa_id {wa_id} when trying to send builder link in summary.")
-            # Optionally send a generic builder link or a message indicating the custom link isn't available
-
+        session["planning_step"] = "END" # Transition to an end state
         return
 
 
