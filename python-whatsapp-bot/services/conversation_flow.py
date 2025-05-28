@@ -490,9 +490,9 @@ async def _planning_loop(wa_id: str, session: dict, msg_type: str, text: str, me
                 logger.error(f"Cannot update plan or regenerate RFI (and thus cannot send builder link): plan_id missing in session summary step for wa_id: {wa_id}")
                 # Do not send builder link if plan_id is missing. Summary already sent.
         except Exception as e:
-            logger.error(f"Error during final plan update or RFI regeneration for plan_id {session.get('plan_id')}: {e}")
+            logger.error(f"Exception caught in summary step for plan_id {session.get('plan_id')}: {e}", exc_info=True)
             # Inform user about RFI failure, but summary was already sent.
-            await whatsapp_client.send_text(wa_id, "Sorry, there was an issue preparing the detailed itinerary link. Your summary is above.")
+            await whatsapp_client.send_text(wa_id, f"Sorry, there was an issue preparing the detailed itinerary link. Your summary is above. {e}")
 
         session["planning_step"] = "END" # Transition to an end state
         return
