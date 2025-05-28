@@ -196,29 +196,8 @@ class ConversationFlow:
                     await whatsapp_client.send_text(wa_id, "Sorry, an error occurred while sending the sample itinerary.")
             else:
                 logger.info(f"No specific sample itinerary PDF found for destination: {destination_city}. Skipping PDF send.")
-                # Optionally send a message to the user, e.g.:
-                # await whatsapp_client.send_text(wa_id, "A general sample itinerary will be prepared for you shortly.")
 
-            # Ensure a plan is created/updated in the backend before showing options
-            try:
-                await backend_client.create_or_update_plan(s)
-                logger.info(f"Plan {s.get('plan_id', 'new')} for requirement {s['backend_id']} synced with backend.")
-                
-                # Now that plan_id is confirmed, call RFI
-                if s.get("plan_id"):
-                    logger.info(f"Calling RFI for plan_id: {s['plan_id']}")
-                    rfi_response = await backend_client.generate_itinerary(s["plan_id"])
-                    logger.info(f"RFI call for plan_id {s['plan_id']} successful. Response: {rfi_response}")
-                    # Store or use rfi_response as needed, e.g., s["rfi_data"] = rfi_response
-                else:
-                    logger.error(f"Cannot call RFI: plan_id is missing after create_or_update_plan for requirement {s['backend_id']}.")
-
-            except Exception as e:
-                logger.error(f"Error syncing plan with backend or calling RFI before POST_REQUIREMENT_CHOICE: {e}")
-                # Decide if we should still proceed or inform user of an error
-                # For now, let's proceed but this could be a point of failure
-
-            # Send buttons
+            # Send buttons immediately after PDF (or if no PDF)
             button_header = "Customize itinerary or use builder"
             button_body = "You can customize your itinerary on WhatsApp or check out our detailed Itinerary Builder"
             await whatsapp_client.send_reply_buttons(
@@ -231,7 +210,23 @@ class ConversationFlow:
                 ],
             )
             await session_svc.set_state(wa_id, "POST_REQUIREMENT_CHOICE")
-            return  # End turn here, wait for button press
+
+            # Now, perform backend operations in the background from the user's perspective
+            try:
+                await backend_client.create_or_update_plan(s)
+                logger.info(f"Plan {s.get('plan_id', 'new')} for requirement {s['backend_id']} synced with backend (background task after buttons sent).")
+                
+                if s.get("plan_id"):
+                    logger.info(f"Calling RFI for plan_id: {s['plan_id']} (background task after buttons sent).")
+                    rfi_response = await backend_client.generate_itinerary(s["plan_id"])
+                    logger.info(f"RFI call for plan_id {s['plan_id']} successful (background task). Response: {rfi_response}")
+                    # Optionally store rfi_response if needed for other background tasks or future reference
+                else:
+                    logger.error(f"Cannot call RFI (background task): plan_id is missing after create_or_update_plan for requirement {s['backend_id']}.")
+            except Exception as e:
+                logger.error(f"Error during background sync/RFI after buttons sent: {e}", exc_info=True) # Log with traceback
+            
+            return  # End turn here, user has received buttons and will make a choice
 
         # ---- still in REQUIREMENT: maybe send suggestions ---------- #
         if (
