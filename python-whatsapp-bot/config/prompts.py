@@ -29,7 +29,10 @@ respond naturally, and determine whether enough information has been gathered to
 ## Output Format
 
 Always respond in this exact JSON format:
-YOU MUST ALWAYS SEND THE UPDATES CORRECTLY
+YOU MUST ALWAYS SEND THE UPDATES CORRECTLY. Make sure you are understanding the user's input correctly. 
+If you are able to reason any updates from the user's input, they MUST be included in the "update" object. 
+It is critical that you do not miss any information provided by the user that pertains to a requirement field.
+
 Example 1:
 
 {{
